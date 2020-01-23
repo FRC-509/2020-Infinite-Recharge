@@ -23,6 +23,9 @@ frc::Joystick r_stick  {0};
 frc::Joystick l_stick  {1};
 frc::Joystick logicontroller {2};
 
+//set to 0 for Tank Drive, 1 for Arcade Drive.
+bool driveMode = 1;
+
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
@@ -94,8 +97,7 @@ void Robot::AutonomousPeriodic() {
 }
 
 void Robot::TeleopInit() {
-  //set to 0 for Tank Drive, 1 for Arcade Drive.
-  bool driveMode = 1;
+  
 }
 
 void Robot::TeleopPeriodic() {
@@ -112,7 +114,7 @@ void Robot::TeleopPeriodic() {
     rightDrive(r_stick.GetY());
   }
   else {
-    cout << "driveMode boolean is somehow neither 1 nor 0.";
+    //cout << "driveMode boolean is somehow neither 1 nor 0.";
   }
 
 }
