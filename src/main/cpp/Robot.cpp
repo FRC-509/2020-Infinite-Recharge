@@ -18,8 +18,8 @@ TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 
-frc::Joystick rightstick  { 0 };
-frc::Joystick leftstick  { 1 };
+frc::Joystick r_stick  { 0 };
+frc::Joystick l_stick  { 1 };
 
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
@@ -92,8 +92,8 @@ void Robot::TeleopInit() {}
   double rightY;
   double leftY;
 void Robot::TeleopPeriodic() {
-  rightY = rightstick.GetY();
-  leftY = leftstick.GetY(); 
+  rightY = r_stick.GetY();
+  leftY = l_stick.GetY(); 
   leftDrive(leftY);
   rightDrive(rightY);
      
