@@ -18,6 +18,7 @@ TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 
+//Logitech Joystick Declaration
 frc::Joystick r_stick  { 0 };
 frc::Joystick l_stick  { 1 };
 
@@ -26,22 +27,25 @@ void Robot::RobotInit() {
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 
-  //Set Robot to have motors off initially
+  //Set motors off initially
   leftFrontFalcon.Set(ControlMode::PercentOutput, 0);
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
 }
 
+//Sync left side motors
 void leftDrive(double power){
   leftFrontFalcon.Set(ControlMode::PercentOutput, power);
   leftBackFalcon.Set(ControlMode::PercentOutput, power);
 }
 
+//Sync right side motors
 void rightDrive(double power){
   rightFrontFalcon.Set(ControlMode::PercentOutput, -power);
   rightBackFalcon.Set(ControlMode::PercentOutput, -power);
 }
+
 /**
  * This function is called every robot packet, no matter the mode. Use
  * this for items like diagnostics that you want ran during disabled,
@@ -88,15 +92,28 @@ void Robot::AutonomousPeriodic() {
   }
 }
 
-void Robot::TeleopInit() {}
-  double rightY;
-  double leftY;
+void Robot::TeleopInit() {
+  //set to 0 for Tank Drive, 1 for Arcade Drive.
+  bool driveMode = 1;
+}
+
 void Robot::TeleopPeriodic() {
-  rightY = r_stick.GetY();
-  leftY = l_stick.GetY(); 
-  leftDrive(leftY);
-  rightDrive(rightY);
-     
+  
+  //The if statement below controls the wheels of the robot.
+  if(driveMode == 1){
+    //Arcade Drive
+    leftDrive(l_stick.GetY() + r_stick.GetX());
+    rightDrive(l_stick.GetY() - r_stick.GetX());
+  }
+  else if(driveMode == 0){
+    //Tank Drive
+    leftDrive(l_stick.GetY());
+    rightDrive(r_stick.GetY());
+  }
+  else {
+    cout << "driveMode boolean is somehow neither 1 nor 0.";
+  }
+
 }
 
 void Robot::TestPeriodic() {}
