@@ -8,15 +8,22 @@
 #include "Robot.h"
 #include <frc/Joystick.h>
 #include <iostream>
-
 #include <frc/smartdashboard/SmartDashboard.h>
+//TalonSRX/Falcon 500 Firmware
 #include <ctre/Phoenix.h>
+//Color Sensor Firmware
+#include <frc/util/color.h>
+#include "rev/ColorSensorV3.h"
+#include "rev/ColorMatch.h"
 
 //Falcon Motor Controller Declaration
 TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
+
+//Color wheel motor
+TalonSRX colorWheelMotor = {8};
 
 //Logitech Joystick Declaration
 frc::Joystick r_stick  {0};
@@ -25,6 +32,14 @@ frc::Joystick logicontroller {2};
 
 //set to 0 for Tank Drive, 1 for Arcade Drive.
 bool driveMode = 1;
+
+static constexpr auto i2cPort = frc::I2C::Port::kOnboard;
+rev::ColorSensorV3 m_colorSensor{i2cPort};
+rev::ColorMatch m_colorMatcher;
+static constexpr frc::Color kBlueTarget = frc::Color(0.143, 0.427, 0.429);
+static constexpr frc::Color kGreenTarget = frc::Color(0.197, 0.561, 0.240);
+static constexpr frc::Color kRedTarget = frc::Color(0.561, 0.232, 0.114);
+static constexpr frc::Color kYellowTarget = frc::Color(0.361, 0.524, 0.113);
 
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
@@ -36,6 +51,11 @@ void Robot::RobotInit() {
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
+
+  m_colorMatcher.AddColorMatch(kBlueTarget);
+  m_colorMatcher.AddColorMatch(kGreenTarget);
+  m_colorMatcher.AddColorMatch(kRedTarget);
+  m_colorMatcher.AddColorMatch(kYellowTarget);
 }
 
 //Sync left side motors
@@ -115,6 +135,54 @@ void Robot::TeleopPeriodic() {
   }
   else {
     //cout << "driveMode boolean is somehow neither 1 nor 0.";
+  }
+
+  frc::Color detectedColor = m_colorSensor.GetColor();
+  std::string colorString;
+  double confidence = 0.0;
+  frc::Color matchedColor = m_colorMatcher.MatchClosestColor(detectedColor, confidence);
+
+  if (matchedColor == kBlueTarget) {
+    colorString = "Blue";
+  }
+  else if (matchedColor == kGreenTarget) {
+    colorString = "Green";
+  }
+  else if (matchedColor == kRedTarget) {
+    colorString = "Red";
+  }
+  else if (matchedColor == kYellowTarget) {
+    colorString = "Yellow";
+  }
+  else {
+    colorString = "Unknown";
+  }
+
+  frc::SmartDashboard::PutNumber("Blue", detectedColor.blue);
+  frc::SmartDashboard::PutNumber("Green", detectedColor.green);
+  frc::SmartDashboard::PutNumber("Red", detectedColor.red);
+  frc::SmartDashboard::PutNumber("Confidence", confidence);
+  frc::SmartDashboard::PutString("Detected Color", colorString);
+
+  if(logicontroller.GetRawButton(0)) {
+    while(colorString != "Blue"){
+      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+    }
+  }
+  if(logicontroller.GetRawButton(1)) {
+    while(colorString != "Green"){
+      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+    }
+  }
+  if(logicontroller.GetRawButton(2)) {
+    while(colorString != "Red"){
+      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+    }
+  }
+  if(logicontroller.GetRawButton(3)) {
+    while(colorString != "Yellow"){
+      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+    }
   }
 
 }
