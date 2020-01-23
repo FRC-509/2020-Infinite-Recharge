@@ -19,8 +19,9 @@ TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 
 //Logitech Joystick Declaration
-frc::Joystick r_stick  { 0 };
-frc::Joystick l_stick  { 1 };
+frc::Joystick r_stick  {0};
+frc::Joystick l_stick  {1};
+frc::Joystick logicontroller {2};
 
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
