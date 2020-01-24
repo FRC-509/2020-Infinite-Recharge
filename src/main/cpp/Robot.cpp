@@ -164,22 +164,22 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
 
-  if(logicontroller.GetRawButton(0)) {
+  if(logicontroller.GetRawButton(1)) {
     while(colorString != "Blue"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
     }
   }
-  if(logicontroller.GetRawButton(1)) {
+  if(logicontroller.GetRawButton(2)) {
     while(colorString != "Green"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
     }
   }
-  if(logicontroller.GetRawButton(2)) {
+  if(logicontroller.GetRawButton(3)) {
     while(colorString != "Red"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
     }
   }
-  if(logicontroller.GetRawButton(3)) {
+  if(logicontroller.GetRawButton(4)) {
     while(colorString != "Yellow"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
     }
