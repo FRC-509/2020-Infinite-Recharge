@@ -24,7 +24,13 @@
 
 //GLOBAL VARIABLES
 
+//Power of shooter
 #define shooterPower 1
+#define servoAngle1 120
+#define servoAngle2 60
+#define conveyorSpeed 0.2
+//set to 0 for Tank Drive, 1 for Arcade Drive.
+bool driveMode = 1;
 
 
 //MOTORS
@@ -60,12 +66,11 @@ frc::Joystick logicontroller {2};
 
 //MISC DECLARATIONS
 
-//set to 0 for Tank Drive, 1 for Arcade Drive.
-bool driveMode = 1;
-
+//Set up color sensor
 static constexpr auto i2cPort = frc::I2C::Port::kOnboard;
 rev::ColorSensorV3 m_colorSensor{i2cPort};
 rev::ColorMatch m_colorMatcher;
+//Set target color RGB values
 static constexpr frc::Color kBlueTarget = frc::Color(0.143, 0.427, 0.429);
 static constexpr frc::Color kGreenTarget = frc::Color(0.197, 0.561, 0.240);
 static constexpr frc::Color kRedTarget = frc::Color(0.561, 0.232, 0.114);
@@ -90,21 +95,26 @@ void shooter(double power){
   r_shooter.Set(ControlMode::PercentOutput, -power);
 }
 
+//Upon robot startup
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 
-  //Set motors off initially
+  //Set wheel falcons off initially
   leftFrontFalcon.Set(ControlMode::PercentOutput, 0);
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
-
-  //Set Neo 550's to off
+  //Set shooter falcons off initially
+  l_shooter.Set(ControlMode::PercentOutput, 0);
+  r_shooter.Set(ControlMode::PercentOutput, 0);
+  //Set color wheel falcon off initially
+  colorWheelMotor.Set(ControlMode::PercentOutput, 0);
+  //Set Neo 550's off initially
   turret.Set(0);
   conveyor.Set(0);
-
+  //Add colors to color match
   m_colorMatcher.AddColorMatch(kBlueTarget);
   m_colorMatcher.AddColorMatch(kGreenTarget);
   m_colorMatcher.AddColorMatch(kRedTarget);
@@ -162,27 +172,14 @@ void Robot::TeleopInit() {
 }
 
 void Robot::TeleopPeriodic() {
-  
-  //The if statement below controls the wheels of the robot.
-  if(driveMode == 1){
-    //Arcade Drive
-    leftDrive(l_stick.GetY() - (0.5 * (r_stick.GetX())));
-    rightDrive(l_stick.GetY() + (0.5 *(r_stick.GetX())));
-  }
-  else if(driveMode == 0){
-    //Tank Drive
-    leftDrive(l_stick.GetY());
-    rightDrive(r_stick.GetY());
-  }
-  else {
-    //cout << "driveMode boolean is somehow neither 1 nor 0.";
-  }
+  //COLOR SENSOR
 
+  //Color Sensor calculations
   frc::Color detectedColor = m_colorSensor.GetColor();
   std::string colorString;
   double confidence = 0.0;
   frc::Color matchedColor = m_colorMatcher.MatchClosestColor(detectedColor, confidence);
-
+  //Set colorString to match detected color
   if (matchedColor == kBlueTarget) {
     colorString = "Blue";
   }
@@ -198,13 +195,12 @@ void Robot::TeleopPeriodic() {
   else {
     colorString = "Unknown";
   }
-
+  //Display color data on SmartDashboard
   frc::SmartDashboard::PutNumber("Blue", detectedColor.blue);
   frc::SmartDashboard::PutNumber("Green", detectedColor.green);
   frc::SmartDashboard::PutNumber("Red", detectedColor.red);
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
- 
   //Input of a button moves color wheel motor until that button is detected.
   if(logicontroller.GetRawButton(1)) {
     while(colorString != "Blue"){
@@ -239,26 +235,44 @@ void Robot::TeleopPeriodic() {
     }
   }
   
+
+  //MOVEMENT
+
+  //The if statement below controls the wheels of the robot.
+  if(driveMode == 1){
+    //Arcade Drive
+    leftDrive(l_stick.GetY() - (0.5 * (r_stick.GetX())));
+    rightDrive(l_stick.GetY() + (0.5 *(r_stick.GetX())));
+  }
+  else if(driveMode == 0){
+    //Tank Drive
+    leftDrive(l_stick.GetY());
+    rightDrive(r_stick.GetY());
+  }
+
+
+  //MISC CONTROLS
+
   //Conveyor belt control
   if(logicontroller.GetRawButton(5)){
-    conveyor.Set(0.2);
+    conveyor.Set(conveyorSpeed);
   }
   else if (logicontroller.GetRawButton(7)){
-    conveyor.Set(-0.2);
+    conveyor.Set(-conveyorSpeed);
   }
   else {
     conveyor.Set(0);
   }
 
-  //Turret control
+  //Turret rotation control
   turret.Set(logicontroller.GetZ());
 
   //Servo control
   if (l_stick.GetRawButton(6)){
-    servo.SetAngle(120);
+    servo.SetAngle(servoAngle1);
   }
   if (l_stick.GetRawButton(7)){
-    servo.SetAngle(60);
+    servo.SetAngle(servoAngle2);
   }
 
   //Shooter control
