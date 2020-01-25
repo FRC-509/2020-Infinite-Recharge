@@ -12,8 +12,10 @@
 #include <frc/Joystick.h>
 #include <iostream>
 #include <frc/smartdashboard/SmartDashboard.h>
+#include "networktables/NetworkTable.h"
+#include "networktables/NetworkTableInstance.h"
 #include <ctre/Phoenix.h>
-#include <frc/util/color.h>
+#include <frc/util/color.h> 
 #include "rev/ColorSensorV3.h"
 #include "rev/ColorMatch.h"
 #include <rev/CANSparkMax.h>
@@ -32,6 +34,7 @@
 //set to 0 for Tank Drive, 1 for Arcade Drive.
 bool driveMode = 1;
 
+int rpm = 4000;
 
 //MOTORS
 
@@ -100,8 +103,17 @@ void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+  //Shooter current limiting
 
-  //Set wheel falcons off initially
+  /*l_shooter->EnableCurrentLimit(true); 
+  l_shooter->ConfigContinuousCurrentLimit(40,15);
+  l_shooter->ConfigPeakCurrentLimit(0,15);
+
+  r_shooter->EnableCurrentLimit(true);
+  r_shooter->ConfigContinuousCurrentLimit(40,15);
+  r_shooter->ConfigPeakCurrentLimit(0,15);
+  */
+  //Set motors off initially
   leftFrontFalcon.Set(ControlMode::PercentOutput, 0);
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
@@ -148,6 +160,7 @@ void Robot::RobotPeriodic() {
 
 void Robot::AutonomousInit() {
   m_autoSelected = m_chooser.GetSelected();
+  
   // m_autoSelected = SmartDashboard::GetString("Auto Selector",
   //     kAutoNameDefault);
   std::cout << "Auto selected: " << m_autoSelected << std::endl;
@@ -268,20 +281,28 @@ void Robot::TeleopPeriodic() {
   turret.Set(logicontroller.GetZ());
 
   //Servo control
-  if (l_stick.GetRawButton(6)){
-    servo.SetAngle(servoAngle1);
+  if (logicontroller.GetRawButton(5)){
+    servo.SetAngle(120);
   }
-  if (l_stick.GetRawButton(7)){
-    servo.SetAngle(servoAngle2);
+  if (logicontroller.GetRawButton(6)){
+    servo.SetAngle(105);
   }
-
+  if (logicontroller.GetRawButton(7)){
+    servo.SetAngle(75);
+  }
+  if (logicontroller.GetRawButton(8)){
+    servo.SetAngle(60);
+  }
+  shooter(logicontroller.GetY());
+  
   //Shooter control
-  if(logicontroller.GetRawButton(8)){
+  if(logicontroller.GetRawButton(5)){
     shooter(shooterPower);
   }
   else {
     shooter(0);
   }
+  
 
 }
 
