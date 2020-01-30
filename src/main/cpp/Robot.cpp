@@ -5,16 +5,38 @@
 /* the project.                                                               */
 /*----------------------------------------------------------------------------*/
 
+
+//LIBRARIES
+
 #include "Robot.h"
 #include <frc/Joystick.h>
 #include <iostream>
 #include <frc/smartdashboard/SmartDashboard.h>
-//TalonSRX/Falcon 500 Firmware
+#include "networktables/NetworkTable.h"
+#include "networktables/NetworkTableInstance.h"
 #include <ctre/Phoenix.h>
-//Color Sensor Firmware
-#include <frc/util/color.h>
+#include <frc/util/color.h> 
 #include "rev/ColorSensorV3.h"
 #include "rev/ColorMatch.h"
+#include <rev/CANSparkMax.h>
+#include <rev/CANSparkMaxDriver.h>
+#include <rev/CANSparkMaxLowLevel.h>
+#include <frc/Servo.h>
+
+
+//GLOBAL VARIABLES
+
+//Power of shooter
+#define shooterPower 1
+#define servoAngle1 120
+#define servoAngle2 60
+#define conveyorSpeed 0.2
+//set to 0 for Tank Drive, 1 for Arcade Drive.
+bool driveMode = 1;
+
+int rpm = 4000;
+
+//MOTORS
 
 //Falcon Motor Controller Declaration
 TalonSRX leftFrontFalcon = {0};
@@ -22,52 +44,93 @@ TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 
+//Shooter
+TalonSRX l_shooter = {6};
+TalonSRX r_shooter = {7};
+
 //Color wheel motor
 TalonSRX colorWheelMotor = {8};
+
+//SparkMax Motor Declaration
+rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
+
+//Servo motor controls rotation of Limelight
+frc::Servo servo {0};
+
+
+//CONTROLLERS
 
 //Logitech Joystick Declaration
 frc::Joystick r_stick  {0};
 frc::Joystick l_stick  {1};
 frc::Joystick logicontroller {2};
 
-//set to 0 for Tank Drive, 1 for Arcade Drive.
-bool driveMode = 1;
 
+//MISC DECLARATIONS
+
+//Set up color sensor
 static constexpr auto i2cPort = frc::I2C::Port::kOnboard;
 rev::ColorSensorV3 m_colorSensor{i2cPort};
 rev::ColorMatch m_colorMatcher;
+//Set target color RGB values
 static constexpr frc::Color kBlueTarget = frc::Color(0.143, 0.427, 0.429);
 static constexpr frc::Color kGreenTarget = frc::Color(0.197, 0.561, 0.240);
 static constexpr frc::Color kRedTarget = frc::Color(0.561, 0.232, 0.114);
 static constexpr frc::Color kYellowTarget = frc::Color(0.361, 0.524, 0.113);
 
+
+//FUNCTIONS
+
+//Sync left wheel motors
+void leftDrive(double power){
+  leftFrontFalcon.Set(ControlMode::PercentOutput, power);
+  leftBackFalcon.Set(ControlMode::PercentOutput, power);
+}
+//Sync right wheel motors
+void rightDrive(double power){
+  rightFrontFalcon.Set(ControlMode::PercentOutput, -power);
+  rightBackFalcon.Set(ControlMode::PercentOutput, -power);
+}
+//Shooter motors
+void shooter(double power){
+  l_shooter.Set(ControlMode::PercentOutput, power);
+  r_shooter.Set(ControlMode::PercentOutput, -power);
+}
+
+//Upon robot startup
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+  //Shooter current limiting
 
+  /*l_shooter->EnableCurrentLimit(true); 
+  l_shooter->ConfigContinuousCurrentLimit(40,15);
+  l_shooter->ConfigPeakCurrentLimit(0,15);
+
+  r_shooter->EnableCurrentLimit(true);
+  r_shooter->ConfigContinuousCurrentLimit(40,15);
+  r_shooter->ConfigPeakCurrentLimit(0,15);
+  */
   //Set motors off initially
   leftFrontFalcon.Set(ControlMode::PercentOutput, 0);
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
-
+  //Set shooter falcons off initially
+  l_shooter.Set(ControlMode::PercentOutput, 0);
+  r_shooter.Set(ControlMode::PercentOutput, 0);
+  //Set color wheel falcon off initially
+  colorWheelMotor.Set(ControlMode::PercentOutput, 0);
+  //Set Neo 550's off initially
+  turret.Set(0);
+  conveyor.Set(0);
+  //Add colors to color match
   m_colorMatcher.AddColorMatch(kBlueTarget);
   m_colorMatcher.AddColorMatch(kGreenTarget);
   m_colorMatcher.AddColorMatch(kRedTarget);
   m_colorMatcher.AddColorMatch(kYellowTarget);
-}
-
-//Sync left side motors
-void leftDrive(double power){
-  leftFrontFalcon.Set(ControlMode::PercentOutput, power);
-  leftBackFalcon.Set(ControlMode::PercentOutput, power);
-}
-
-//Sync right side motors
-void rightDrive(double power){
-  rightFrontFalcon.Set(ControlMode::PercentOutput, -power);
-  rightBackFalcon.Set(ControlMode::PercentOutput, -power);
 }
 
 /**
@@ -97,6 +160,7 @@ void Robot::RobotPeriodic() {
 
 void Robot::AutonomousInit() {
   m_autoSelected = m_chooser.GetSelected();
+  
   // m_autoSelected = SmartDashboard::GetString("Auto Selector",
   //     kAutoNameDefault);
   std::cout << "Auto selected: " << m_autoSelected << std::endl;
@@ -121,27 +185,14 @@ void Robot::TeleopInit() {
 }
 
 void Robot::TeleopPeriodic() {
-  
-  //The if statement below controls the wheels of the robot.
-  if(driveMode == 1){
-    //Arcade Drive
-    leftDrive(l_stick.GetY() + r_stick.GetX());
-    rightDrive(l_stick.GetY() - r_stick.GetX());
-  }
-  else if(driveMode == 0){
-    //Tank Drive
-    leftDrive(l_stick.GetY());
-    rightDrive(r_stick.GetY());
-  }
-  else {
-    //cout << "driveMode boolean is somehow neither 1 nor 0.";
-  }
+  //COLOR SENSOR
 
+  //Color Sensor calculations
   frc::Color detectedColor = m_colorSensor.GetColor();
   std::string colorString;
   double confidence = 0.0;
   frc::Color matchedColor = m_colorMatcher.MatchClosestColor(detectedColor, confidence);
-
+  //Set colorString to match detected color
   if (matchedColor == kBlueTarget) {
     colorString = "Blue";
   }
@@ -157,33 +208,101 @@ void Robot::TeleopPeriodic() {
   else {
     colorString = "Unknown";
   }
-
+  //Display color data on SmartDashboard
   frc::SmartDashboard::PutNumber("Blue", detectedColor.blue);
   frc::SmartDashboard::PutNumber("Green", detectedColor.green);
   frc::SmartDashboard::PutNumber("Red", detectedColor.red);
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
-
+  //Input of a button moves color wheel motor until that button is detected.
   if(logicontroller.GetRawButton(1)) {
     while(colorString != "Blue"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      if(logicontroller.GetRawButton(9)){
+        break;
+      }
     }
   }
   if(logicontroller.GetRawButton(2)) {
     while(colorString != "Green"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      if(logicontroller.GetRawButton(9)){
+        break;
+      }
     }
   }
   if(logicontroller.GetRawButton(3)) {
     while(colorString != "Red"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      if(logicontroller.GetRawButton(9)){
+        break;
+      }
     }
   }
   if(logicontroller.GetRawButton(4)) {
     while(colorString != "Yellow"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      if(logicontroller.GetRawButton(9)){
+        break;
+      }
     }
   }
+  
+
+  //MOVEMENT
+
+  //The if statement below controls the wheels of the robot.
+  if(driveMode == 1){
+    //Arcade Drive
+    leftDrive(l_stick.GetY() - (0.5 * (r_stick.GetX())));
+    rightDrive(l_stick.GetY() + (0.5 *(r_stick.GetX())));
+  }
+  else if(driveMode == 0){
+    //Tank Drive
+    leftDrive(l_stick.GetY());
+    rightDrive(r_stick.GetY());
+  }
+
+
+  //MISC CONTROLS
+
+  //Conveyor belt control
+  if(logicontroller.GetRawButton(5)){
+    conveyor.Set(conveyorSpeed);
+  }
+  else if (logicontroller.GetRawButton(7)){
+    conveyor.Set(-conveyorSpeed);
+  }
+  else {
+    conveyor.Set(0);
+  }
+
+  //Turret rotation control
+  turret.Set(logicontroller.GetZ());
+
+  //Servo control
+  if (logicontroller.GetRawButton(5)){
+    servo.SetAngle(120);
+  }
+  if (logicontroller.GetRawButton(6)){
+    servo.SetAngle(105);
+  }
+  if (logicontroller.GetRawButton(7)){
+    servo.SetAngle(75);
+  }
+  if (logicontroller.GetRawButton(8)){
+    servo.SetAngle(60);
+  }
+  shooter(logicontroller.GetY());
+  
+  //Shooter control
+  if(logicontroller.GetRawButton(5)){
+    shooter(shooterPower);
+  }
+  else {
+    shooter(0);
+  }
+  
 
 }
 
