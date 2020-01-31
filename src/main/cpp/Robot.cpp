@@ -22,14 +22,29 @@
 #include <rev/CANSparkMaxDriver.h>
 #include <rev/CANSparkMaxLowLevel.h>
 #include <frc/Servo.h>
+#include <frc/Filesystem.h>
+#include <frc/trajectory/TrajectoryUtil.h>
+#include <wpi/Path.h>
+#include <wpi/SmallString.h>
+
+
+/*
+wpi::SmallString<64> deployDirectory;
+frc::filesystem::GetDeployDirectory(deployDirectory);
+wpi::sys::path::append(deployDirectory, "paths");
+wpi::sys::path::append(deployDirectory, "AutoONe.wpilib.json");
+*/
+//frc::Trajectory trajectory = frc::TrajectoryUtil::FromPathweaverJson(deployDirectory);
 
 
 //GLOBAL VARIABLES
 
 //Power of shooter
 #define shooterPower 1
-#define servoAngle1 120
-#define servoAngle2 60
+
+int LEDPWM;
+
+//Speed of conveyor(maybe necessary)
 #define conveyorSpeed 0.2
 //set to 0 for Tank Drive, 1 for Arcade Drive.
 bool driveMode = 1;
@@ -103,6 +118,7 @@ void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+  
   //Shooter current limiting
 
   /*l_shooter->EnableCurrentLimit(true); 
@@ -282,17 +298,14 @@ void Robot::TeleopPeriodic() {
 
   //Servo control
   if (logicontroller.GetRawButton(5)){
-    servo.SetAngle(120);
+    LEDPWM = LEDPWM + 10;
+    servo.SetAngle(LEDPWM);
   }
   if (logicontroller.GetRawButton(6)){
-    servo.SetAngle(105);
+    LEDPWM = LEDPWM - 10;
+    servo.SetAngle(LEDPWM);
   }
-  if (logicontroller.GetRawButton(7)){
-    servo.SetAngle(75);
-  }
-  if (logicontroller.GetRawButton(8)){
-    servo.SetAngle(60);
-  }
+
   shooter(logicontroller.GetY());
   
   //Shooter control
