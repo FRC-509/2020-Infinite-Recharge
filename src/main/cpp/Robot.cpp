@@ -22,11 +22,19 @@
 #include <rev/CANSparkMaxDriver.h>
 #include <rev/CANSparkMaxLowLevel.h>
 #include <frc/Servo.h>
+#include <frc/Filesystem.h>
+#include <frc/trajectory/TrajectoryUtil.h>
+#include <wpi/Path.h>
+#include <wpi/SmallString.h>
+
+
+
 
 
 //GLOBAL VARIABLES
 
 //Power of shooter
+#define intakePower 0.5
 #define shooterPower 1
 #define servoAngle1 120
 #define servoAngle2 60
@@ -37,7 +45,9 @@ bool driveMode = 1;
 int rpm = 4000;
 
 //MOTORS
-
+// McGintake
+ rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
+ rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
 //Falcon Motor Controller Declaration
 TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
@@ -45,11 +55,11 @@ TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 
 //Shooter
-TalonSRX l_shooter = {6};
-TalonSRX r_shooter = {7};
+TalonSRX l_shooter = {4};
+TalonSRX r_shooter = {5};
 
 //Color wheel motor
-TalonSRX colorWheelMotor = {8};
+TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
 rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
@@ -65,7 +75,6 @@ frc::Servo servo {0};
 frc::Joystick r_stick  {0};
 frc::Joystick l_stick  {1};
 frc::Joystick logicontroller {2};
-
 
 //MISC DECLARATIONS
 
@@ -94,10 +103,13 @@ void rightDrive(double power){
 }
 //Shooter motors
 void shooter(double power){
-  l_shooter.Set(ControlMode::PercentOutput, power);
-  r_shooter.Set(ControlMode::PercentOutput, -power);
+  l_shooter.Set(ControlMode::PercentOutput, -power);
+  r_shooter.Set(ControlMode::PercentOutput, power);
 }
-
+void intake(double power){
+  MCGintakeLeft.Set(power);
+  MCGintakeRight.Set(-power);
+}
 //Upon robot startup
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
@@ -130,8 +142,12 @@ void Robot::RobotInit() {
   m_colorMatcher.AddColorMatch(kBlueTarget);
   m_colorMatcher.AddColorMatch(kGreenTarget);
   m_colorMatcher.AddColorMatch(kRedTarget);
+
   m_colorMatcher.AddColorMatch(kYellowTarget);
+    MCGintakeLeft.Set(0);
+    MCGintakeRight.Set(0);
 }
+
 
 /**
  * This function is called every robot packet, no matter the mode. Use
@@ -170,7 +186,14 @@ void Robot::AutonomousInit() {
   } else {
     // Default Auto goes here
   }
+wpi::SmallString<64> deployDirectory;
+frc::filesystem::GetDeployDirectory(deployDirectory);
+wpi::sys::path::append(deployDirectory, "paths");
+wpi::sys::path::append(deployDirectory, "YourPath.wpilib.json");
+frc::Trajectory trajectory = frc::TrajectoryUtil::FromPathweaverJson(deployDirectory);
 }
+
+
 
 void Robot::AutonomousPeriodic() {
   if (m_autoSelected == kAutoNameCustom) {
@@ -302,7 +325,16 @@ void Robot::TeleopPeriodic() {
   else {
     shooter(0);
   }
-  
+
+  if (logicontroller.GetRawButton(6)){
+    intake(intakePower);
+  }
+  else if (logicontroller.GetRawButton(8)){
+    intake(-intakePower);
+  }
+  else {
+    intake(0);
+  }
 
 }
 
@@ -311,3 +343,4 @@ void Robot::TestPeriodic() {}
 #ifndef RUNNING_FRC_TESTS
 int main() { return frc::StartRobot<Robot>(); }
 #endif
+
