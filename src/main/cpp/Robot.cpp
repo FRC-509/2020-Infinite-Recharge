@@ -28,42 +28,35 @@
 #include <wpi/SmallString.h>
 
 
-
-
-
 //GLOBAL VARIABLES
 
-//Power of shooter
 #define intakePower 0.5
 #define shooterPower 1
-#define servoAngle1 120
-#define servoAngle2 60
+#define shooterRPM 4000
 #define conveyorSpeed 0.2
 //set to 0 for Tank Drive, 1 for Arcade Drive.
-bool driveMode = 1;
+#define driveMode 1
 
-int rpm = 4000;
 
 //MOTORS
-// McGintake
- rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
- rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
+
 //Falcon Motor Controller Declaration
 TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
-
 //Shooter
 TalonSRX l_shooter = {4};
 TalonSRX r_shooter = {5};
-
 //Color wheel motor
 TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
 rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
+// McGintake
+ rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
+ rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
 
 //Servo motor controls rotation of Limelight
 frc::Servo servo {0};
@@ -75,6 +68,7 @@ frc::Servo servo {0};
 frc::Joystick r_stick  {0};
 frc::Joystick l_stick  {1};
 frc::Joystick logicontroller {2};
+
 
 //MISC DECLARATIONS
 
@@ -103,13 +97,19 @@ void rightDrive(double power){
 }
 //Shooter motors
 void shooter(double power){
+  //UNTESTED Velocity control
+  //l_shooter.Set(ControlMode::Velocity, -power * rpm * 4096 / 600);
+  //r_shooter.Set(ControlMode::Velocity, power * rpm * 4096 / 600);
+
   l_shooter.Set(ControlMode::PercentOutput, -power);
   r_shooter.Set(ControlMode::PercentOutput, power);
 }
+//Intake motors
 void intake(double power){
   MCGintakeLeft.Set(power);
   MCGintakeRight.Set(-power);
 }
+
 //Upon robot startup
 void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
@@ -130,22 +130,19 @@ void Robot::RobotInit() {
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
-  //Set shooter falcons off initially
   l_shooter.Set(ControlMode::PercentOutput, 0);
   r_shooter.Set(ControlMode::PercentOutput, 0);
-  //Set color wheel falcon off initially
   colorWheelMotor.Set(ControlMode::PercentOutput, 0);
-  //Set Neo 550's off initially
   turret.Set(0);
   conveyor.Set(0);
+  MCGintakeLeft.Set(0);
+  MCGintakeRight.Set(0);
+  
   //Add colors to color match
   m_colorMatcher.AddColorMatch(kBlueTarget);
   m_colorMatcher.AddColorMatch(kGreenTarget);
   m_colorMatcher.AddColorMatch(kRedTarget);
-
   m_colorMatcher.AddColorMatch(kYellowTarget);
-    MCGintakeLeft.Set(0);
-    MCGintakeRight.Set(0);
 }
 
 
@@ -192,8 +189,6 @@ wpi::sys::path::append(deployDirectory, "paths");
 wpi::sys::path::append(deployDirectory, "YourPath.wpilib.json");
 frc::Trajectory trajectory = frc::TrajectoryUtil::FromPathweaverJson(deployDirectory);
 }
-
-
 
 void Robot::AutonomousPeriodic() {
   if (m_autoSelected == kAutoNameCustom) {
@@ -316,7 +311,6 @@ void Robot::TeleopPeriodic() {
   if (logicontroller.GetRawButton(8)){
     servo.SetAngle(60);
   }
-  shooter(logicontroller.GetY());
   
   //Shooter control
   if(logicontroller.GetRawButton(5)){
@@ -326,6 +320,7 @@ void Robot::TeleopPeriodic() {
     shooter(0);
   }
 
+  //Intake control
   if (logicontroller.GetRawButton(6)){
     intake(intakePower);
   }
