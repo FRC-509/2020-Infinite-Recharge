@@ -53,7 +53,10 @@ TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
 rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
+//Conveyor Belt and Lift
 rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift1 { 1 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift2 { 2 , rev::CANSparkMax::MotorType::kBrushless};
 // McGintake
 rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
@@ -109,6 +112,12 @@ void intake(double power){
   MCGintakeLeft.Set(power);
   MCGintakeRight.Set(-power);
 }
+//Conveyor belt and Lift
+void conveyor(double power){
+    conveyor.Set(power);
+    lif1.Set(power);
+    lift2.Set(-power);
+}
 
 //Upon robot startup
 void Robot::RobotInit() {
@@ -135,6 +144,8 @@ void Robot::RobotInit() {
   colorWheelMotor.Set(ControlMode::PercentOutput, 0);
   turret.Set(0);
   conveyor.Set(0);
+  lift1.Set(0);
+  lift2.Set(0);
   MCGintakeLeft.Set(0);
   MCGintakeRight.Set(0);
   
@@ -285,14 +296,16 @@ void Robot::TeleopPeriodic() {
   //MISC CONTROLS
 
   //Conveyor belt control
+  //intake
   if(logicontroller.GetRawButton(5)){
-    conveyor.Set(conveyorSpeed);
+    conveyor(conveyorSpeed);
   }
+  //extake
   else if (logicontroller.GetRawButton(7)){
-    conveyor.Set(-conveyorSpeed);
+    conveyor(-conveyorSpeed);
   }
   else {
-    conveyor.Set(0);
+    conveyor(0);
   }
 
   //Turret rotation control
@@ -313,7 +326,7 @@ void Robot::TeleopPeriodic() {
   }
   
   //Shooter control
-  if(logicontroller.GetRawButton(/*NEEDS BUTTON, MAYBE START?*/)){
+  if(logicontroller.GetRawButton(10)){
     shooter(shooterPower);
   }
   else {
