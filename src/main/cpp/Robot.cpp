@@ -39,7 +39,7 @@ wpi::sys::path::append(deployDirectory, "AutoONe.wpilib.json");
 
 //GLOBAL VARIABLES
 
-//Power of shooter
+#define intakePower 0.5
 #define shooterPower 1
 
 int LEDPWM;
@@ -47,9 +47,8 @@ int LEDPWM;
 //Speed of conveyor(maybe necessary)
 #define conveyorSpeed 0.2
 //set to 0 for Tank Drive, 1 for Arcade Drive.
-bool driveMode = 1;
+#define driveMode 1
 
-int rpm = 4000;
 
 //MOTORS
 
@@ -58,17 +57,23 @@ TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
-
 //Shooter
-TalonSRX l_shooter = {6};
-TalonSRX r_shooter = {7};
-
+TalonSRX l_shooter = {4};
+TalonSRX r_shooter = {5};
 //Color wheel motor
-TalonSRX colorWheelMotor = {8};
+TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
 rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
+//Conveyor Belt and Lift
+rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift1 { 1 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift2 { 2 , rev::CANSparkMax::MotorType::kBrushless};
+//McGintake
+rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
+//Elevator
+rev::CANSparkMax elevator { 5 , rev::CANSparkMax::MotorType::kBrushless};
 
 //Servo motor controls rotation of Limelight
 frc::Servo servo {0};
@@ -112,8 +117,23 @@ void rightDrive(double power){
 }
 //Shooter motors
 void shooter(double power){
-  l_shooter.Set(ControlMode::PercentOutput, power);
-  r_shooter.Set(ControlMode::PercentOutput, -power);
+  //UNTESTED Velocity control
+  //l_shooter.Set(ControlMode::Velocity, -power * rpm * 4096 / 600);
+  //r_shooter.Set(ControlMode::Velocity, power * rpm * 4096 / 600);
+
+  l_shooter.Set(ControlMode::PercentOutput, -power);
+  r_shooter.Set(ControlMode::PercentOutput, power);
+}
+//Intake motors
+void intake(double power){
+  MCGintakeLeft.Set(power);
+  MCGintakeRight.Set(-power);
+}
+//Conveyor belt and Lift
+void conveyor(double power){
+    belt.Set(power);
+    lift1.Set(power);
+    lift2.Set(-power);
 }
 
 //Upon robot startup
@@ -137,20 +157,23 @@ void Robot::RobotInit() {
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
-  //Set shooter falcons off initially
   l_shooter.Set(ControlMode::PercentOutput, 0);
   r_shooter.Set(ControlMode::PercentOutput, 0);
-  //Set color wheel falcon off initially
   colorWheelMotor.Set(ControlMode::PercentOutput, 0);
-  //Set Neo 550's off initially
   turret.Set(0);
-  conveyor.Set(0);
+  belt.Set(0);
+  lift1.Set(0);
+  lift2.Set(0);
+  MCGintakeLeft.Set(0);
+  MCGintakeRight.Set(0);
+  
   //Add colors to color match
   m_colorMatcher.AddColorMatch(kBlueTarget);
   m_colorMatcher.AddColorMatch(kGreenTarget);
   m_colorMatcher.AddColorMatch(kRedTarget);
   m_colorMatcher.AddColorMatch(kYellowTarget);
 }
+
 
 /**
  * This function is called every robot packet, no matter the mode. Use
@@ -189,6 +212,11 @@ void Robot::AutonomousInit() {
   } else {
     // Default Auto goes here
   }
+wpi::SmallString<64> deployDirectory;
+frc::filesystem::GetDeployDirectory(deployDirectory);
+wpi::sys::path::append(deployDirectory, "paths");
+wpi::sys::path::append(deployDirectory, "YourPath.wpilib.json");
+frc::Trajectory trajectory = frc::TrajectoryUtil::FromPathweaverJson(deployDirectory);
 }
 
 void Robot::AutonomousPeriodic() {
@@ -290,17 +318,16 @@ void Robot::TeleopPeriodic() {
   //MISC CONTROLS
 
   //Conveyor belt control
-  /*
   if(logicontroller.GetRawButton(5)){
-    conveyor.Set(conveyorSpeed);
+    conveyor(conveyorSpeed);
   }
+  //extake
   else if (logicontroller.GetRawButton(7)){
-    conveyor.Set(-conveyorSpeed);
+    conveyor(-conveyorSpeed);
   }
   else {
-    conveyor.Set(0);
+    conveyor(0);
   }
-  */
   //Turret rotation control
   turret.Set(logicontroller.GetZ());
 
@@ -312,21 +339,54 @@ void Robot::TeleopPeriodic() {
     LEDPWM = LEDPWM - 1;
     servo.SetAngle(LEDPWM);    
   }
-  //shooter(logicontroller.GetY());
+  if (logicontroller.GetRawButton(6)){
+    servo.SetAngle(105);
+  }
+  if (logicontroller.GetRawButton(7)){
+    servo.SetAngle(75);
+  }
+  if (logicontroller.GetRawButton(8)){
+    servo.SetAngle(60);
+  }
   */
+  
   //Shooter control
-  /*
-  if(logicontroller.GetRawButton(5)){
+  if(logicontroller.GetRawButton(10)){
     shooter(shooterPower);
   }
   else {
     shooter(0);
   }
-  */
-} 
+
+  //Intake control
+  if (logicontroller.GetRawButton(6)){
+    intake(intakePower);
+  }
+  else if (logicontroller.GetRawButton(8)){
+    intake(-intakePower);
+  }
+  else {
+    intake(0);
+  }
+
+  //Elevator control
+  if(r_stick.GetRawButton(9)){
+    //Launch Elevator
+    
+  }
+  else if(r_stick.GetRawButton(10)){
+    //Retract Elevator
+
+  }
+  else{
+    elevator.Set(0);
+  }
+
+}
 
 void Robot::TestPeriodic() {}
 
 #ifndef RUNNING_FRC_TESTS
 int main() { return frc::StartRobot<Robot>(); }
 #endif
+
