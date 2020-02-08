@@ -55,8 +55,8 @@ TalonSRX colorWheelMotor = {6};
 rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
 // McGintake
- rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
- rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
 
 //Servo motor controls rotation of Limelight
 frc::Servo servo {0};
