@@ -313,7 +313,7 @@ void Robot::TeleopPeriodic() {
   }
   
   //Shooter control
-  if(logicontroller.GetRawButton(5)){
+  if(logicontroller.GetRawButton(/*NEEDS BUTTON, MAYBE START?*/)){
     shooter(shooterPower);
   }
   else {
