@@ -26,7 +26,7 @@
 #include <frc/trajectory/TrajectoryUtil.h>
 #include <wpi/Path.h>
 #include <wpi/SmallString.h>
-
+#include <frc/DigitalInput.h>
 
 /*
 wpi::SmallString<64> deployDirectory;
@@ -73,7 +73,10 @@ rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
 //Servo motor controls rotation of Limelight
 frc::Servo servo {0};
 
-
+frc::DigitalInput sensorZero{0};
+frc::DigitalInput sensorOne{1};
+frc::DigitalInput sensorTwo{2};
+frc::DigitalInput sensThree{3};
 //CONTROLLERS
 
 //Logitech Joystick Declaration
@@ -118,7 +121,7 @@ void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
-  
+ 
   //Shooter current limiting
 
   /*l_shooter->EnableCurrentLimit(true); 
@@ -158,7 +161,7 @@ void Robot::RobotInit() {
  * LiveWindow and SmartDashboard integrated updating.
  */
 void Robot::RobotPeriodic() {
-  
+  frc::SmartDashboard::PutNumber("led pwm val", LEDPWM);
 }
 
 /**
@@ -202,6 +205,10 @@ void Robot::TeleopInit() {
 
 void Robot::TeleopPeriodic() {
   //COLOR SENSOR
+  if (sensorZero.Get() == true){
+    frc::SmartDashboard::PutBoolean("Ball Intake", sensorZero.Get());
+
+  }
 
   //Color Sensor calculations
   frc::Color detectedColor = m_colorSensor.GetColor();
@@ -283,6 +290,7 @@ void Robot::TeleopPeriodic() {
   //MISC CONTROLS
 
   //Conveyor belt control
+  /*
   if(logicontroller.GetRawButton(5)){
     conveyor.Set(conveyorSpeed);
   }
@@ -292,32 +300,30 @@ void Robot::TeleopPeriodic() {
   else {
     conveyor.Set(0);
   }
-
+  */
   //Turret rotation control
   turret.Set(logicontroller.GetZ());
 
   //Servo control
-  if (logicontroller.GetRawButton(5)){
-    LEDPWM = LEDPWM + 10;
+  /*if (){
+    LEDPWM = LEDPWM + 1;
     servo.SetAngle(LEDPWM);
+  } else if(logicontroller.GetRawButton(6)){
+    LEDPWM = LEDPWM - 1;
+    servo.SetAngle(LEDPWM);    
   }
-  if (logicontroller.GetRawButton(6)){
-    LEDPWM = LEDPWM - 10;
-    servo.SetAngle(LEDPWM);
-  }
-
-  shooter(logicontroller.GetY());
-  
+  //shooter(logicontroller.GetY());
+  */
   //Shooter control
+  /*
   if(logicontroller.GetRawButton(5)){
     shooter(shooterPower);
   }
   else {
     shooter(0);
   }
-  
-
-}
+  */
+} 
 
 void Robot::TestPeriodic() {}
 
