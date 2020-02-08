@@ -54,12 +54,14 @@ TalonSRX colorWheelMotor = {6};
 //SparkMax Motor Declaration
 rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
 //Conveyor Belt and Lift
-rev::CANSparkMax conveyor { 9 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift1 { 1 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift2 { 2 , rev::CANSparkMax::MotorType::kBrushless};
-// McGintake
+//McGintake
 rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
+//Elevator
+rev::CANSparkMax elevator { 5 , rev::CANSparkMax::MotorType::kBrushless};
 
 //Servo motor controls rotation of Limelight
 frc::Servo servo {0};
@@ -114,8 +116,8 @@ void intake(double power){
 }
 //Conveyor belt and Lift
 void conveyor(double power){
-    conveyor.Set(power);
-    lif1.Set(power);
+    belt.Set(power);
+    lift1.Set(power);
     lift2.Set(-power);
 }
 
@@ -143,7 +145,7 @@ void Robot::RobotInit() {
   r_shooter.Set(ControlMode::PercentOutput, 0);
   colorWheelMotor.Set(ControlMode::PercentOutput, 0);
   turret.Set(0);
-  conveyor.Set(0);
+  belt.Set(0);
   lift1.Set(0);
   lift2.Set(0);
   MCGintakeLeft.Set(0);
@@ -342,6 +344,19 @@ void Robot::TeleopPeriodic() {
   }
   else {
     intake(0);
+  }
+
+  //Elevator control
+  if(r_stick.GetRawButton(9)){
+    //Launch Elevator
+    
+  }
+  else if(r_stick.GetRawButton(10)){
+    //Retract Elevator
+
+  }
+  else{
+    elevator.Set(0);
   }
 
 }
