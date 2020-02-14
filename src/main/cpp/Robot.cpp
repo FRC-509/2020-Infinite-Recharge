@@ -27,14 +27,8 @@
 #include <wpi/Path.h>
 #include <wpi/SmallString.h>
 #include <frc/DigitalInput.h>
-
-/*
-wpi::SmallString<64> deployDirectory;
-frc::filesystem::GetDeployDirectory(deployDirectory);
-wpi::sys::path::append(deployDirectory, "paths");
-wpi::sys::path::append(deployDirectory, "AutoONe.wpilib.json");
-*/
-//frc::Trajectory trajectory = frc::TrajectoryUtil::FromPathweaverJson(deployDirectory);
+#include <frc/Compressor.h>
+#include <frc/Solenoid.h>
 
 
 //GLOBAL VARIABLES
@@ -44,10 +38,14 @@ wpi::sys::path::append(deployDirectory, "AutoONe.wpilib.json");
 
 int LEDPWM;
 
+//Speed of Shooter in rpm
+#define rpm 3000
 //Speed of conveyor(maybe necessary)
-#define conveyorSpeed 0.2
+#define conveyorSpeed 0.5
 //set to 0 for Tank Drive, 1 for Arcade Drive.
 #define driveMode 1
+//Is the shooter in use?
+bool shooting = 0;
 
 
 //MOTORS
@@ -58,33 +56,42 @@ TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 //Shooter
-TalonSRX l_shooter = {4};
-TalonSRX r_shooter = {5};
+//TalonSRX l_shooter = {4};
+//TalonSRX r_shooter = {5};
 //Color wheel motor
-TalonSRX colorWheelMotor = {6};
+//TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
-rev::CANSparkMax turret { 4 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax turret { 6 , rev::CANSparkMax::MotorType::kBrushless};
 //Conveyor Belt and Lift
 rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax lift1 { 1 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax lift2 { 2 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift1 { 4 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift2 { 5 , rev::CANSparkMax::MotorType::kBrushless};
+//hood
+rev::CANSparkMax hood { 11 , rev::CANSparkMax::MotorType::kBrushless};
 //McGintake
-rev::CANSparkMax MCGintakeLeft {6, rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax MCGintakeRight {7, rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax MCGintakeLeft { 8 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax MCGintakeRight { 7 , rev::CANSparkMax::MotorType::kBrushless};
 //Elevator
-rev::CANSparkMax elevator { 5 , rev::CANSparkMax::MotorType::kBrushless};
+//rev::CANSparkMax elevator { 10 , rev::CANSparkMax::MotorType::kBrushless};
 
 //Servo motor controls rotation of Limelight
-frc::Servo servo {0};
+//frc::Servo servo {0};
 
-frc::DigitalInput sensorZero{0};
-frc::DigitalInput sensorOne{1};
-frc::DigitalInput sensorTwo{2};
-frc::DigitalInput sensThree{3};
+//Solenoids
+frc::Compressor compressor { 0 };
+//One of these is up and the other is down ?
+frc::Solenoid intakeSolOpen { 0 };
+frc::Solenoid intakeSolClose { 1 };
+//Digital Sensors
+frc::DigitalInput sensorZero{3};
+frc::DigitalInput sensorOne{2};
+frc::DigitalInput sensorTwo{1};
+frc::DigitalInput sensorThree{0};
+
+
 //CONTROLLERS
 
-//Logitech Joystick Declaration
 frc::Joystick r_stick  {0};
 frc::Joystick l_stick  {1};
 frc::Joystick logicontroller {2};
@@ -121,19 +128,19 @@ void shooter(double power){
   //l_shooter.Set(ControlMode::Velocity, -power * rpm * 4096 / 600);
   //r_shooter.Set(ControlMode::Velocity, power * rpm * 4096 / 600);
 
-  l_shooter.Set(ControlMode::PercentOutput, -power);
-  r_shooter.Set(ControlMode::PercentOutput, power);
+  //Kinda works? No Velocity control
+//  l_shooter.Set(ControlMode::PercentOutput, -power);
+//  r_shooter.Set(ControlMode::PercentOutput, power);
+  
+  //load more balls
+  lift1.Set(power);
+  lift2.Set(-power);
+  belt.Set(conveyorSpeed);
 }
 //Intake motors
 void intake(double power){
   MCGintakeLeft.Set(power);
   MCGintakeRight.Set(-power);
-}
-//Conveyor belt and Lift
-void conveyor(double power){
-    belt.Set(power);
-    lift1.Set(power);
-    lift2.Set(-power);
 }
 
 //Upon robot startup
@@ -157,10 +164,10 @@ void Robot::RobotInit() {
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
-  l_shooter.Set(ControlMode::PercentOutput, 0);
-  r_shooter.Set(ControlMode::PercentOutput, 0);
-  colorWheelMotor.Set(ControlMode::PercentOutput, 0);
-  turret.Set(0);
+  //l_shooter.Set(ControlMode::PercentOutput, 0);
+  //r_shooter.Set(ControlMode::PercentOutput, 0);
+  //colorWheelMotor.Set(ControlMode::PercentOutput, 0);
+  //turret.Set(0);
   belt.Set(0);
   lift1.Set(0);
   lift2.Set(0);
@@ -233,10 +240,6 @@ void Robot::TeleopInit() {
 
 void Robot::TeleopPeriodic() {
   //COLOR SENSOR
-  if (sensorZero.Get() == true){
-    frc::SmartDashboard::PutBoolean("Ball Intake", sensorZero.Get());
-
-  }
 
   //Color Sensor calculations
   frc::Color detectedColor = m_colorSensor.GetColor();
@@ -266,6 +269,7 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
   //Input of a button moves color wheel motor until that button is detected.
+  /* COMMENTED BECAUSE COLOR WHEEL MOTOR NOT WIRED
   if(logicontroller.GetRawButton(1)) {
     while(colorString != "Blue"){
       colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
@@ -298,7 +302,25 @@ void Robot::TeleopPeriodic() {
       }
     }
   }
-  
+  */
+  //Display Number of Powercells
+  int powercells;
+  frc::SmartDashboard::PutBoolean("zero", sensorZero.Get());
+  frc::SmartDashboard::PutBoolean("one", sensorOne.Get());
+  frc::SmartDashboard::PutBoolean("two", sensorTwo.Get());
+  frc::SmartDashboard::PutBoolean("three", sensorThree.Get());
+  frc::SmartDashboard::PutNumber("Powercells", powercells);
+
+  //Automatic Conveyor Belt Control
+  while(sensorZero.Get() == 1){
+    frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
+    belt.Set(conveyorSpeed);
+  }
+  while(sensorZero.Get() == 0 && shooting == 0) {
+    belt.Set(0);
+    frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
+  }
+
 
   //MOVEMENT
 
@@ -317,45 +339,28 @@ void Robot::TeleopPeriodic() {
 
   //MISC CONTROLS
 
-  //Conveyor belt control
-  if(logicontroller.GetRawButton(5)){
-    conveyor(conveyorSpeed);
+  //Conveyor belt MANUAL CONTROL BACKUP
+  if(l_stick.GetRawButton(6)){ 
+    belt.Set(conveyorSpeed);
   }
-  //extake
-  else if (logicontroller.GetRawButton(7)){
-    conveyor(-conveyorSpeed);
+  else if(l_stick.GetRawButton(7)){
+    belt.Set(-conveyorSpeed);
   }
-  else {
-    conveyor(0);
+  else if(l_stick.GetRawButton(8)){
+    belt.Set(0);
   }
+  
   //Turret rotation control
-  turret.Set(logicontroller.GetZ());
-
-  //Servo control
-  /*if (){
-    LEDPWM = LEDPWM + 1;
-    servo.SetAngle(LEDPWM);
-  } else if(logicontroller.GetRawButton(6)){
-    LEDPWM = LEDPWM - 1;
-    servo.SetAngle(LEDPWM);    
-  }
-  if (logicontroller.GetRawButton(6)){
-    servo.SetAngle(105);
-  }
-  if (logicontroller.GetRawButton(7)){
-    servo.SetAngle(75);
-  }
-  if (logicontroller.GetRawButton(8)){
-    servo.SetAngle(60);
-  }
-  */
+  //turret.Set(logicontroller.GetZ());
   
   //Shooter control
-  if(logicontroller.GetRawButton(10)){
+  if(logicontroller.GetRawButton(7)){
     shooter(shooterPower);
-  }
+    shooting = 1;
+  } 
   else {
     shooter(0);
+    shooting = 0;
   }
 
   //Intake control
@@ -370,18 +375,31 @@ void Robot::TeleopPeriodic() {
   }
 
   //Elevator control
-  if(r_stick.GetRawButton(9)){
+  if(r_stick.GetRawButton(10)){
     //Launch Elevator
     
   }
-  else if(r_stick.GetRawButton(10)){
+  
+  else if(r_stick.GetRawButton(11)){
     //Retract Elevator
 
   }
   else{
-    elevator.Set(0);
+    //elevator.Set(0);
   }
 
+  //Intake Solenoid
+  bool solUp = 1;
+  if(logicontroller.GetRawButton(5) && solUp == 0){
+    solUp = 1;
+    intakeSolOpen.Set(false);
+    intakeSolClose.Set(true);
+  }
+  else if(logicontroller.GetRawButton(5) && solUp == 1){
+    solUp = 0;
+    intakeSolOpen.Set(true);
+    intakeSolClose.Set(false);
+  }
 }
 
 void Robot::TestPeriodic() {}
@@ -389,4 +407,3 @@ void Robot::TestPeriodic() {}
 #ifndef RUNNING_FRC_TESTS
 int main() { return frc::StartRobot<Robot>(); }
 #endif
-
