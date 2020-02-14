@@ -99,6 +99,10 @@ frc::Joystick logicontroller {2};
 
 //MISC DECLARATIONS
 
+//Machine Learning Data Table
+auto inst = nt::NetworkTableInstance::GetDefault();
+auto table = inst.GetTable("ML");
+
 //Set up color sensor
 static constexpr auto i2cPort = frc::I2C::Port::kOnboard;
 rev::ColorSensorV3 m_colorSensor{i2cPort};
@@ -239,6 +243,15 @@ void Robot::TeleopInit() {
 }
 
 void Robot::TeleopPeriodic() {
+  //NetworkTable Data
+  
+  //Default String Array
+  std::string none[0] = "None";
+  //Put Data
+  frc::SmartDashboard::PutNumber("Number of Objects", table->GetNumber("nb_objects", 0));
+  frc::SmartDashboard::PutStringArray("Object Types", table->GetStringArray("object_classes", none[0]));
+
+
   //COLOR SENSOR
 
   //Color Sensor calculations
