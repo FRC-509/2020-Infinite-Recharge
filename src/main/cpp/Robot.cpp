@@ -64,7 +64,7 @@ TalonSRX r_shooter = {5};
 //TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
-rev::CANSparkMax turret { 11 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax turret { 7 , rev::CANSparkMax::MotorType::kBrushless};
 //Conveyor Belt and Lift
 rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift1 { 4 , rev::CANSparkMax::MotorType::kBrushless};
