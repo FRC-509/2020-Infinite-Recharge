@@ -58,13 +58,13 @@ TalonSRX rightBackFalcon = {3};
 //MCGintake
 TalonSRX MCGintake = {7};
 //Shooter
-//TalonSRX l_shooter = {4};
-//TalonSRX r_shooter = {5};
+TalonSRX l_shooter = {4};
+TalonSRX r_shooter = {5};
 //Color wheel motor
 //TalonSRX colorWheelMotor = {6};
 
 //SparkMax Motor Declaration
-rev::CANSparkMax turret { 6 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax turret { 11 , rev::CANSparkMax::MotorType::kBrushless};
 //Conveyor Belt and Lift
 rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift1 { 4 , rev::CANSparkMax::MotorType::kBrushless};
@@ -72,16 +72,14 @@ rev::CANSparkMax lift2 { 5 , rev::CANSparkMax::MotorType::kBrushless};
 //hood
 rev::CANSparkMax hood { 8 , rev::CANSparkMax::MotorType::kBrushless};
 //Elevator
-//rev::CANSparkMax elevator { 10 , rev::CANSparkMax::MotorType::kBrushless};
-
-//Servo motor controls rotation of Limelight
-//frc::Servo servo {0};
+rev::CANSparkMax elevator { 6 , rev::CANSparkMax::MotorType::kBrushless};
 
 //Solenoids
 frc::Compressor compressor { 0 };
 //One of these is up and the other is down ?
 frc::Solenoid intakeSolOpen { 0 };
 frc::Solenoid intakeSolClose { 1 };
+
 //Digital Sensors
 frc::DigitalInput sensorZero{3};
 frc::DigitalInput sensorOne{2};
@@ -132,8 +130,8 @@ void shooter(double power){
   //r_shooter.Set(ControlMode::Velocity, power * rpm * 4096 / 600);
 
   //Kinda works? No Velocity control
-//  l_shooter.Set(ControlMode::PercentOutput, -power);
-//  r_shooter.Set(ControlMode::PercentOutput, power);
+  l_shooter.Set(ControlMode::PercentOutput, -power);
+  r_shooter.Set(ControlMode::PercentOutput, power);
   
   //load more balls
   lift1.Set(power);
@@ -361,7 +359,7 @@ void Robot::TeleopPeriodic() {
   }
   
   //Turret rotation control
-  //turret.Set(logicontroller.GetZ());
+  turret.Set(logicontroller.GetZ());
   
   //Shooter control
   if(logicontroller.GetRawButton(7)){
