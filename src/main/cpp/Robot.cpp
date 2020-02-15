@@ -55,6 +55,8 @@ TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
+//MCGintake
+TalonSRX MCGintake = {7};
 //Shooter
 //TalonSRX l_shooter = {4};
 //TalonSRX r_shooter = {5};
@@ -68,10 +70,7 @@ rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift1 { 4 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift2 { 5 , rev::CANSparkMax::MotorType::kBrushless};
 //hood
-rev::CANSparkMax hood { 11 , rev::CANSparkMax::MotorType::kBrushless};
-//McGintake
-rev::CANSparkMax MCGintakeLeft { 8 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax MCGintakeRight { 7 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax hood { 8 , rev::CANSparkMax::MotorType::kBrushless};
 //Elevator
 //rev::CANSparkMax elevator { 10 , rev::CANSparkMax::MotorType::kBrushless};
 
@@ -143,8 +142,7 @@ void shooter(double power){
 }
 //Intake motors
 void intake(double power){
-  MCGintakeLeft.Set(power);
-  MCGintakeRight.Set(-power);
+  MCGintake.Set(ControlMode::PercentOutput, power);
 }
 
 //Upon robot startup
@@ -175,8 +173,7 @@ void Robot::RobotInit() {
   belt.Set(0);
   lift1.Set(0);
   lift2.Set(0);
-  MCGintakeLeft.Set(0);
-  MCGintakeRight.Set(0);
+  MCGintake.Set(ControlMode::PercentOutput, 0);
   
   //Add colors to color match
   m_colorMatcher.AddColorMatch(kBlueTarget);
