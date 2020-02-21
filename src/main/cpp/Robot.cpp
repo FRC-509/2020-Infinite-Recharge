@@ -49,11 +49,21 @@ bool shooting = 0;
 //UNTESTED/UNFUNCTIONAL
 //Lift Power
 #define liftPower 0.5
+//Limelight
+#define limelightHeight 0
+#define limelightA1 0
+#define limelightA2 0
 //Rpm of Shooter
 double shooterRPM;
 double targetDistance;
 double hoodAngle;
 double vFeetPerSecond;
+//Elevator PID
+#define elevSetpoint 0
+#define elevUp 0
+#define elevDown 0
+#define elevKp 0
+#define elevKi 0
 
 int LEDPWM;
 
@@ -123,6 +133,7 @@ static constexpr frc::Color kYellowTarget = frc::Color(0.361, 0.524, 0.113);
 
 //FUNCTIONS
 
+//Cotangent
 double cotan(double i){
   return 1/tan(i);
 }
@@ -160,6 +171,17 @@ void shooter(double rpm){
 void intake(double power){
   MCGintake.Set(ControlMode::PercentOutput, power);
 }
+//PID
+double PID(double error, double Kp, double Ki){
+  double p;
+  double i;
+  double integral;
+
+  integral += error;
+  p = Kp*error;
+  i = Ki*integral;
+  return p+i;
+}
 
 //Upon robot startup
 void Robot::RobotInit() {
@@ -172,7 +194,6 @@ void Robot::RobotInit() {
   /*l_shooter->EnableCurrentLimit(true); 
   l_shooter->ConfigContinuousCurrentLimit(40,15);
   l_shooter->ConfigPeakCurrentLimit(0,15);
-
   r_shooter->EnableCurrentLimit(true);
   r_shooter->ConfigContinuousCurrentLimit(40,15);
   r_shooter->ConfigPeakCurrentLimit(0,15);
@@ -375,25 +396,7 @@ void Robot::TeleopPeriodic() {
     belt.Set(0);
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   }
-  
-  //Turret rotation control
-  turret.Set(logicontroller.GetZ());
-  
-  //Shooter control
-  if(logicontroller.GetRawButton(7)){
-    shooter(shooterRPM);
-    shooting = 1;
-  } 
-  else {
-    shooter(0);
-    shooting = 0;
-  }
-  //RPM Calculations
-  hoodAngle = atan((2*6.52)/targetDistance);
-  vFeetPerSecond = (2*(sqrt((6.52*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
-  shooterRPM = targetDistance;
-
-  //Intake control
+  //Intake control MANUAL BACKUP
   if (logicontroller.GetRawButton(6)){
     intake(intakePower);
   }
@@ -402,6 +405,27 @@ void Robot::TeleopPeriodic() {
   }
   else {
     intake(0);
+  }
+
+  
+  //Turret rotation control
+  turret.Set(logicontroller.GetZ());
+  
+  //Shooter Control
+  //Getting Distance
+  targetDistance = (6.52 - limelightHeight) / tan(limelightA1 + limelightA2);
+  //Getting RPM
+  hoodAngle = atan((2*6.52)/targetDistance);
+  vFeetPerSecond = (2*(sqrt((6.52*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
+  shooterRPM = (vFeetPerSecond*(60*12))/(4*pi);
+  //Shooter Launch
+  if(logicontroller.GetRawButton(7)){
+    shooter(shooterRPM);
+    shooting = 1;
+  }
+  else {
+    shooter(0);
+    shooting = 0;
   }
 
   //Intake Solenoid
@@ -421,18 +445,18 @@ void Robot::TeleopPeriodic() {
 ///INCOMPLETE
 ///UNTESTED
 ///REQUIRES PID
+double elevPosition;
+elevator.Set(PID(elevSetpoint - elevPosition, elevKi, elevKp));
   if(r_stick.GetRawButton(10)){
     //Launch Elevator
-    
+    elevSetpoint = elevUp;
   }
   
   else if(r_stick.GetRawButton(11)){
     //Retract Elevator
+    elevSetpoint = elevDown;
+  }
 
-  }
-  else{
-    //elevator.Set(0);
-  }
 
   //Auto Ball Pickup
   ///UNTESTED
