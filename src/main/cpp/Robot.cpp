@@ -29,23 +29,33 @@
 #include <frc/DigitalInput.h>
 #include <frc/Compressor.h>
 #include <frc/Solenoid.h>
+#include <cmath>
+
+using namespace std;
 
 
 //GLOBAL VARIABLES
 
+//FUNCTIONAL
+//Power of Intake
 #define intakePower 0.5
-#define shooterPower 1
-
-int LEDPWM;
-
-//Speed of Shooter in rpm
-#define rpm 3000
-//Speed of conveyor(maybe necessary)
+//Speed of conveyor
 #define conveyorSpeed 0.5
 //set to 0 for Tank Drive, 1 for Arcade Drive.
 #define driveMode 1
 //Is the shooter in use?
 bool shooting = 0;
+
+//UNTESTED/UNFUNCTIONAL
+//Lift Power
+#define liftPower 0.5
+//Rpm of Shooter
+double shooterRPM;
+double targetDistance;
+double hoodAngle;
+double vFeetPerSecond;
+
+int LEDPWM;
 
 
 //MOTORS
@@ -113,6 +123,9 @@ static constexpr frc::Color kYellowTarget = frc::Color(0.361, 0.524, 0.113);
 
 //FUNCTIONS
 
+double cotan(double i){
+  return 1/tan(i);
+}
 //Sync left wheel motors
 void leftDrive(double power){
   leftFrontFalcon.Set(ControlMode::PercentOutput, power);
@@ -124,19 +137,24 @@ void rightDrive(double power){
   rightBackFalcon.Set(ControlMode::PercentOutput, -power);
 }
 //Shooter motors
-void shooter(double power){
+void shooter(double rpm){
   //UNTESTED Velocity control
-  //l_shooter.Set(ControlMode::Velocity, -power * rpm * 4096 / 600);
-  //r_shooter.Set(ControlMode::Velocity, power * rpm * 4096 / 600);
+  //ControlMode::Velocity looks for Units/100ms
+  //Convert Revolutions/Minute -> Units per 100ms
+  //Revolutions/Minute * Units/Revolution (4096) = Units/Minute
+  //Units/Minute * 1/600 = Units/100ms
+  //l_shooter.Set(ControlMode::Velocity, rpm * 4096 / 600);
+  //r_shooter.Set(ControlMode::Velocity, rpm * 4096 / 600);
 
   //Kinda works? No Velocity control
-  l_shooter.Set(ControlMode::PercentOutput, -power);
-  r_shooter.Set(ControlMode::PercentOutput, power);
+  //l_shooter.Set(ControlMode::PercentOutput, -power);
+  //r_shooter.Set(ControlMode::PercentOutput, power);
   
   //load more balls
-  lift1.Set(power);
-  lift2.Set(-power);
+  lift1.Set(liftPower);
+  lift2.Set(-liftPower);
   belt.Set(conveyorSpeed);
+  frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
 }
 //Intake motors
 void intake(double power){
@@ -164,11 +182,12 @@ void Robot::RobotInit() {
   leftBackFalcon.Set(ControlMode::PercentOutput, 0);
   rightFrontFalcon.Set(ControlMode::PercentOutput, 0);
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
-  //l_shooter.Set(ControlMode::PercentOutput, 0);
-  //r_shooter.Set(ControlMode::PercentOutput, 0);
+  l_shooter.Set(ControlMode::PercentOutput, 0);
+  r_shooter.Set(ControlMode::PercentOutput, 0);
   //colorWheelMotor.Set(ControlMode::PercentOutput, 0);
-  //turret.Set(0);
+  turret.Set(0);
   belt.Set(0);
+  frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   lift1.Set(0);
   lift2.Set(0);
   MCGintake.Set(ControlMode::PercentOutput, 0);
@@ -211,7 +230,7 @@ void Robot::AutonomousInit() {
   
   // m_autoSelected = SmartDashboard::GetString("Auto Selector",
   //     kAutoNameDefault);
-  std::cout << "Auto selected: " << m_autoSelected << std::endl;
+  cout << "Auto selected: " << m_autoSelected << endl;
 
   if (m_autoSelected == kAutoNameCustom) {
     // Custom Auto goes here
@@ -239,19 +258,15 @@ void Robot::TeleopInit() {
 
 void Robot::TeleopPeriodic() {
   //NetworkTable Data
-  
-  //Default String Array
-  std::string none[0] = "None";
   //Put Data
   frc::SmartDashboard::PutNumber("Number of Objects", table->GetNumber("nb_objects", 0));
-  frc::SmartDashboard::PutStringArray("Object Types", table->GetStringArray("object_classes", none[0]));
-
+  frc::SmartDashboard::PutStringArray("Object Types", table->GetStringArray("object_classes", {}));
 
   //COLOR SENSOR
 
   //Color Sensor calculations
   frc::Color detectedColor = m_colorSensor.GetColor();
-  std::string colorString;
+  string colorString;
   double confidence = 0.0;
   frc::Color matchedColor = m_colorMatcher.MatchClosestColor(detectedColor, confidence);
   //Set colorString to match detected color
@@ -320,11 +335,11 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutNumber("Powercells", powercells);
 
   //Automatic Conveyor Belt Control
-  while(sensorZero.Get() == 1){
+  if(sensorZero.Get() == 1){
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
     belt.Set(conveyorSpeed);
   }
-  while(sensorZero.Get() == 0 && shooting == 0) {
+  if(sensorZero.Get() == 0 && shooting == 0) {
     belt.Set(0);
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   }
@@ -350,12 +365,15 @@ void Robot::TeleopPeriodic() {
   //Conveyor belt MANUAL CONTROL BACKUP
   if(l_stick.GetRawButton(6)){ 
     belt.Set(conveyorSpeed);
+    frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
   }
   else if(l_stick.GetRawButton(7)){
     belt.Set(-conveyorSpeed);
+    frc::SmartDashboard::PutString("CONVEYOR BELT:", "REVERSE");
   }
   else if(l_stick.GetRawButton(8)){
     belt.Set(0);
+    frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   }
   
   //Turret rotation control
@@ -363,13 +381,17 @@ void Robot::TeleopPeriodic() {
   
   //Shooter control
   if(logicontroller.GetRawButton(7)){
-    shooter(shooterPower);
+    shooter(shooterRPM);
     shooting = 1;
   } 
   else {
     shooter(0);
     shooting = 0;
   }
+  //RPM Calculations
+  hoodAngle = atan((2*6.52)/targetDistance);
+  vFeetPerSecond = (2*(sqrt((6.52*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
+  shooterRPM = targetDistance;
 
   //Intake control
   if (logicontroller.GetRawButton(6)){
@@ -380,20 +402,6 @@ void Robot::TeleopPeriodic() {
   }
   else {
     intake(0);
-  }
-
-  //Elevator control
-  if(r_stick.GetRawButton(10)){
-    //Launch Elevator
-    
-  }
-  
-  else if(r_stick.GetRawButton(11)){
-    //Retract Elevator
-
-  }
-  else{
-    //elevator.Set(0);
   }
 
   //Intake Solenoid
@@ -407,6 +415,52 @@ void Robot::TeleopPeriodic() {
     solUp = 0;
     intakeSolOpen.Set(true);
     intakeSolClose.Set(false);
+  }
+
+//Elevator control
+///INCOMPLETE
+///UNTESTED
+///REQUIRES PID
+  if(r_stick.GetRawButton(10)){
+    //Launch Elevator
+    
+  }
+  
+  else if(r_stick.GetRawButton(11)){
+    //Retract Elevator
+
+  }
+  else{
+    //elevator.Set(0);
+  }
+
+  //Auto Ball Pickup
+  ///UNTESTED
+  ///INCOMPLETE
+
+  //Declaring Variables to store Table Information
+  auto boxes = table->GetNumberArray("boxes", {});
+  auto object_classes = table->GetStringArray("object_classes", {});
+  
+  //Variable to store object center coordinate
+  vector< pair<double, double> > objectCoordinates = {};
+  //For each object, average the coordinates into a center coordinate. Push this to objectCoordinates.
+  for (auto i = 0; i < boxes.size(); i += 4) {
+    /* [top_left__x1, top_left_y1, bottom_right_x1, bottom_right_y1, top_left_x2, top_left_y2, … ] */
+    auto centerX = (boxes[i+0] + boxes[i+2]) / 2;
+    auto centerY = (boxes[i+1] + boxes[i+3]) / 2;
+    auto coordinate = make_pair(centerX, centerY);
+    objectCoordinates.push_back(coordinate);
+  }
+
+  //???
+  for (auto i = 0; i < object_classes.size(); i++) {
+    if (object_classes[i] == "") {
+      auto firstBallCoordinate = objectCoordinates[i];
+      auto firstBallX = firstBallCoordinate.first;
+      auto firstBallY = firstBallCoordinate.second;
+      break;
+    }
   }
 }
 
