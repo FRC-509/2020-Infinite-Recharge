@@ -461,7 +461,7 @@ void Robot::TeleopPeriodic() {
   #else
   //Using Limelight
   double llPortH = lltable->GetNumber("tvert", 0)*2;
-  targetDistance = ((focalLength*outerPortH*limelightY)/((llPortH)*limelightHeight))+innerPortDepth;
+  targetDistance = 304.8*((focalLength*outerPortH*limelightY)/((llPortH)*limelightHeight))+innerPortDepth;
   horizontalOffset = lltable->GetNumber("tx", 0);
   #endif
   //Getting RPM
