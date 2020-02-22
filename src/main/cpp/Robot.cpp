@@ -48,6 +48,7 @@ double turretPosition;
 #define intakePower 0.5
 #define conveyorSpeed 0.5
 #define liftPower 0.5
+#define colorWheelPower 0.5
 #define RPM 2000
 
 //For Testing PID Setpoints
@@ -63,27 +64,31 @@ TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
-//MCGintake
-TalonSRX MCGintake = {7};
 //Shooter
 TalonSRX l_shooter = {4};
 TalonSRX r_shooter = {5};
-//Color wheel motor
-TalonSRX colorWheelMotor = {6};
+//MCGintake
+TalonSRX MCGintake = {6};
+//Skywalker
+TalonSRX skywalker = {7};
 
 //SparkMax Motor Declaration
-rev::CANSparkMax turret { 7 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder turretPoint = turret.GetEncoder();
-//Conveyor Belt and Lift
-rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax lift1 { 4 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax lift2 { 5 , rev::CANSparkMax::MotorType::kBrushless};
-//hood
-rev::CANSparkMax hood { 8 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder hoodPoint = hood.GetEncoder();
+//Color Wheel Motor
+rev::CANSparkMax colorWheelMotor { 8 , rev::CANSparkMax::MotorType::kBrushed};
+//Lift moves powercells from belt to turret
+rev::CANSparkMax lift1 { 9 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift2 { 10 , rev::CANSparkMax::MotorType::kBrushless};
 //Elevator
-rev::CANSparkMax elevator { 6 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax elevator { 11 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANEncoder elevPoint = elevator.GetEncoder();
+//Rotation of Shooter
+rev::CANSparkMax turret { 12 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANEncoder turretPoint = turret.GetEncoder();
+//Hood controls angle of Shooter
+rev::CANSparkMax hood { 13 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANEncoder hoodPoint = hood.GetEncoder();
+//Conveyor Belt and Lift
+rev::CANSparkMax belt { 14 , rev::CANSparkMax::MotorType::kBrushless};
 
 //Solenoids
 frc::Compressor compressor { 0 };
@@ -137,7 +142,7 @@ void Robot::RobotInit() {
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
   l_shooter.Set(ControlMode::PercentOutput, 0);
   r_shooter.Set(ControlMode::PercentOutput, 0);
-  colorWheelMotor.Set(ControlMode::PercentOutput, 0);
+  colorWheelMotor.Set(0);
   turret.Set(0);
   belt.Set(0);
   frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
@@ -253,6 +258,19 @@ void Robot::TeleopPeriodic() {
   }
   else {
     lift(0);
+  }
+
+  //Color Wheel Motor
+  if(logicontroller.GetRawButton(4)){
+    colorWheelMotor.Set(colorWheelPower);
+  }
+
+  //Skywalker
+  if(l_stick.GetRawButton(4)){
+    skywalker.Set(ControlMode::PercentOutput, 0.2);
+  }
+  else if (l_stick.GetRawButton(5)){
+    skywalker.Set(ControlMode::PercentOutput, -0.2);
   }
 
   //Hood
