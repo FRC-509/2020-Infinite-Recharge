@@ -42,6 +42,10 @@ double hoodPosition;
 double elevPosition;
 double turretPosition;
 
+bool colorWheelUp = 1;
+bool elevBreakUp = 1;
+bool solUp = 1;
+
 //CONSTANTS & OTHER GLOBAL VARIABLES
 //FUNCTIONAL
 //Power of Intake
@@ -95,6 +99,10 @@ frc::Compressor compressor { 0 };
 //One of these is up and the other is down ?
 frc::Solenoid intakeSolOpen { 0 };
 frc::Solenoid intakeSolClose { 1 };
+frc::Solenoid colorWheelSolOpen { 2 };
+frc::Solenoid colorWheelSolClose { 3 };
+frc::Solenoid elevBreakOpen { 4 };
+frc::Solenoid elevBreakClose { 5 };
 
 
 //CONTROLLERS
@@ -119,9 +127,11 @@ void rightDrive(double power){
 }
 
 void shooter(int power){
-  l_shooter.Set(ControlMode::Velocity, power * RPM * 4096 / 600);
-  r_shooter.Set(ControlMode::Velocity, power * RPM * 4096 / 600);
-  cout << "SHOOTER RUNNING AT" << RPM << "RPM";
+  //l_shooter.Set(ControlMode::Velocity, power * RPM * 4096 / 600);
+  //r_shooter.Set(ControlMode::Velocity, power * RPM * 4096 / 600);
+  //cout << "SHOOTER RUNNING AT" << RPM << "RPM";
+  l_shooter.Set(ControlMode::PercentOutput, power*0.2);
+  r_shooter.Set(ControlMode::PercentOutput, power*-0.2);
 }
 
 void lift(double power){
@@ -213,6 +223,7 @@ void Robot::TeleopPeriodic() {
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   }
 
+  //DELCARE INTAKE AS - POWER, EXTAKE AS + POWER
   //Intake
   if (logicontroller.GetRawButton(5)){
     MCGintake.Set(ControlMode::PercentOutput, conveyorSpeed);
@@ -227,7 +238,6 @@ void Robot::TeleopPeriodic() {
   }
 
   //Intake Solenoid
-  bool solUp = 1;
   if(logicontroller.GetRawButton(2) && solUp == 0){
     solUp = 1;
     intakeSolOpen.Set(false);
@@ -239,6 +249,19 @@ void Robot::TeleopPeriodic() {
     intakeSolOpen.Set(true);
     intakeSolClose.Set(false);
     cout << "SOLENOID DOWN";
+  }
+
+  //Color Wheel Solenoid
+  if(r_stick.GetRawButton(3) && colorWheelUp == 0){
+    colorWheelUp = 1;
+    colorWheelSolOpen.Set(true);
+    colorWheelSolClose.Set(false);
+    cout << "COLOR WHEEL UP";
+  }
+  else if(r_stick.GetRawButton(3) && colorWheelUp == 1){
+    colorWheelUp = 0;
+    colorWheelSolOpen.Set(false);
+    colorWheelSolClose.Set(true);
   }
 
   //Shooter
@@ -256,6 +279,9 @@ void Robot::TeleopPeriodic() {
   if(logicontroller.GetRawButton(3)){
     lift(liftPower);
   }
+  else if(logicontroller.GetRawButton(10)){
+    lift(-liftPower);
+  }
   else {
     lift(0);
   }
@@ -264,6 +290,8 @@ void Robot::TeleopPeriodic() {
   if(logicontroller.GetRawButton(4)){
     colorWheelMotor.Set(colorWheelPower);
   }
+
+  
 
   //Skywalker
   if(l_stick.GetRawButton(4)){
@@ -274,10 +302,10 @@ void Robot::TeleopPeriodic() {
   }
 
   //Hood
-  hood.Set(-logicontroller.GetRawAxis(1));
+  hood.Set(-logicontroller.GetRawAxis(1)*0.25);
 
   //Elevator
-  elevator.Set(logicontroller.GetRawAxis(0));
+  elevator.Set(logicontroller.GetRawAxis(0)*0.3);
 
   /*  THE CODE BELOW IS FOR FINDING SETPOINTS FOR PID
       COMMENT IT OUT UNLESS WE NEED TO REDO PID SETPOINTS */
