@@ -38,42 +38,46 @@ using namespace std;
 //GLOBAL VARIABLES
 
 //CONFIGURATION
-//Comment out for Tank Drive
+//  Comment out for Tank Drive
 #define arcadeDrive
+//  Comment out to Disable Auto Ball Pickup
+#define autoBallPickup
 //  Uncomment to control Auto Shooting with Machine Learning rather than the Limelight.
 //#define portML
 //  Uncomment to run Setpoint Configuration
 //#define TestSetpoints
+string pointTest = "hood";
 
 //CONSTANTS & OTHER GLOBAL VARIABLES
+
 //FUNCTIONAL
 //Power of Intake
 #define intakePower 0.5
 //Speed of conveyor
 #define conveyorSpeed 0.5
-
-//Is the shooter in use?
-bool shooting = 0;
-//Number of Powercells
-int powercells;
-
-//UNTESTED/UNFUNCTIONAL
-//Lift Power
-#define liftPower 0.5
 //Limelight
-#define limelightHeight 0
+#define limelightHeight 584.2
 #define limelightY 240
 #define focalLength 2.9272781257541
 #define outerPortH 762
 #define innerPortDepth 742.95
+
+//UNTESTED/UNFUNCTIONAL
+//Lift Power
+#define liftPower 0.5
+//Hood Properties
+#define countRange 1680
+#define angleRange 15
 //Rpm of Shooter
 double shooterRPM;
 double targetDistance;
-double hoodAngle;
 double vFeetPerSecond;
+
+//PID
 //Elevator PID
 #define elevUp 0
 #define elevDown 0
+#define elevIntermediate 0
 #define elevKp 0
 #define elevKi 0
 double elevSetpoint;
@@ -82,6 +86,8 @@ double elevPosition;
 #define hoodDown 0
 #define hoodKp 0
 #define hoodKi 0
+double hoodAngle;
+double hoodSetpoint;
 double hoodPosition;
 //Turret PID
 #define turretKp 0
@@ -92,8 +98,16 @@ double horizontalOffset;
 //Turret Soft Stop
 #define turretMax 0
 
-//For Testing PID Setpoints
-string pointTest = "hood";
+//  State Tracking Variables
+//Is the shooter in use?
+bool shooting = 0;
+//Number of Powercells
+int powercells;
+//Starting Mode of Solenoid
+bool solUp = 1;
+//Powercell Pickup mode (0 for manual, 1 for auto)
+bool pickupMode = 0;
+
 
 int LEDPWM;
 
@@ -105,27 +119,31 @@ TalonSRX leftFrontFalcon = {0};
 TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
-//MCGintake
-TalonSRX MCGintake = {7};
 //Shooter
 TalonSRX l_shooter = {4};
 TalonSRX r_shooter = {5};
-//Color wheel motor
-TalonSRX colorWheelMotor = {6};
+//MCGintake
+TalonSRX MCGintake = {6};
+//Skywalker
+TalonSRX skywalker = {7};
 
 //SparkMax Motor Declaration
-rev::CANSparkMax turret { 7 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder turretPoint = turret.GetEncoder();
-//Conveyor Belt and Lift
-rev::CANSparkMax belt { 9 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax lift1 { 4 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANSparkMax lift2 { 5 , rev::CANSparkMax::MotorType::kBrushless};
-//hood
-rev::CANSparkMax hood { 8 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder hoodPoint = hood.GetEncoder();
+//Color Wheel Motor
+rev::CANSparkMax colorWheelMotor { 8 , rev::CANSparkMax::MotorType::kBrushed};
+//Lift moves powercells from belt to turret
+rev::CANSparkMax lift1 { 9 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax lift2 { 10 , rev::CANSparkMax::MotorType::kBrushless};
 //Elevator
-rev::CANSparkMax elevator { 6 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANSparkMax elevator { 11 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANEncoder elevPoint = elevator.GetEncoder();
+//Rotation of Shooter
+rev::CANSparkMax turret { 12 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANEncoder turretPoint = turret.GetEncoder();
+//Hood controls angle of Shooter
+rev::CANSparkMax hood { 13 , rev::CANSparkMax::MotorType::kBrushless};
+rev::CANEncoder hoodPoint = hood.GetEncoder();
+//Conveyor Belt and Lift
+rev::CANSparkMax belt { 14 , rev::CANSparkMax::MotorType::kBrushless};
 
 //Solenoids
 frc::Compressor compressor { 0 };
@@ -152,7 +170,6 @@ frc::Joystick logicontroller {2};
 //Machine Learning Data Table
 auto inst = nt::NetworkTableInstance::GetDefault();
 auto table = inst.GetTable("ML");
-
 //Limelight Data Table
 auto llinst = nt::NetworkTableInstance::GetDefault();
 auto lltable = llinst.GetTable("limelight");
@@ -201,8 +218,6 @@ void shooter(double rpm){
     belt.Set(conveyorSpeed);
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
   }
-  
-
   //No Velocity control
   //l_shooter.Set(ControlMode::PercentOutput, -power);
   //r_shooter.Set(ControlMode::PercentOutput, power);
@@ -248,7 +263,8 @@ void Robot::RobotInit() {
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
   l_shooter.Set(ControlMode::PercentOutput, 0);
   r_shooter.Set(ControlMode::PercentOutput, 0);
-  colorWheelMotor.Set(ControlMode::PercentOutput, 0);
+  skywalker.Set(ControlMode::PercentOutput, 0);
+  colorWheelMotor.Set(0);
   turret.Set(0);
   belt.Set(0);
   frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
@@ -356,7 +372,7 @@ void Robot::TeleopPeriodic() {
   //Input of a button moves color wheel motor until the color of that button is detected.
   if(logicontroller.GetRawButton(1)) {
     while(colorString != "Blue"){
-      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      colorWheelMotor.Set(0.5);
       if(logicontroller.GetRawButton(9)){
         break;
       }
@@ -364,7 +380,7 @@ void Robot::TeleopPeriodic() {
   }
   if(logicontroller.GetRawButton(2)) {
     while(colorString != "Green"){
-      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      colorWheelMotor.Set(0.5);
       if(logicontroller.GetRawButton(9)){
         break;
       }
@@ -372,7 +388,7 @@ void Robot::TeleopPeriodic() {
   }
   if(logicontroller.GetRawButton(3)) {
     while(colorString != "Red"){
-      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      colorWheelMotor.Set(0.5);
       if(logicontroller.GetRawButton(9)){
         break;
       }
@@ -380,7 +396,7 @@ void Robot::TeleopPeriodic() {
   }
   if(logicontroller.GetRawButton(4)) {
     while(colorString != "Yellow"){
-      colorWheelMotor.Set(ControlMode::PercentOutput, 0.5);
+      colorWheelMotor.Set(0.5);
       if(logicontroller.GetRawButton(9)){
         break;
       }
@@ -468,7 +484,10 @@ void Robot::TeleopPeriodic() {
   hoodAngle = atan((2*6.52)/targetDistance);
   vFeetPerSecond = (2*(sqrt((6.52*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
   shooterRPM = (vFeetPerSecond*(60*12))/(4*M_PI);
-  //Update Hood Encoder
+  //Convert Angle to Encoder Counts
+  //1680 Counts ~ 15 Degrees
+  hoodSetpoint = hoodAngle * countRange / angleRange;
+  //Update Encoders
   hoodPosition = hoodPoint.GetPosition();
   turretPosition = turretPoint.GetPosition();
   //Shooter Launch
@@ -477,7 +496,7 @@ void Robot::TeleopPeriodic() {
     shooting = 1;
     lltable->PutNumber("ledMode", 3);
     //Hood Up
-    hood.Set(PID(hoodAngle-hoodPosition, hoodKp, hoodKi));
+    hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
     //Turret Control
     turret.Set(PID(horizontalOffset, turretKp, turretKi));
   }
@@ -491,7 +510,6 @@ void Robot::TeleopPeriodic() {
 
 
   //Intake Solenoid
-  bool solUp = 1;
   if(logicontroller.GetRawButton(5) && solUp == 0){
     solUp = 1;
     intakeSolOpen.Set(false);
@@ -504,16 +522,19 @@ void Robot::TeleopPeriodic() {
   }
 
 //Elevator control
-///INCOMPLETE
 ///UNTESTED
-///NEEDS Ki, Kp, and encoder reference points
+///NEEDS Ki, Kp
 elevPosition = elevPoint.GetPosition();
 elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
   if(r_stick.GetRawButton(10)){
-    //Launch Elevator
+    //Extend Elevator
     elevSetpoint = elevUp;
   }
-  else if(r_stick.GetRawButton(11)){
+  else if (r_stick.GetRawButton(11)){
+    //Climb
+    elevSetpoint = elevIntermediate;
+  }
+  else if(r_stick.GetRawButton(9)){
     //Retract Elevator
     elevSetpoint = elevDown;
   }
@@ -531,7 +552,7 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
   }
   */
 
-
+#ifdef autoBallPickup
   //Auto Ball Pickup
   ///UNTESTED
   ///INCOMPLETE
@@ -547,15 +568,33 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
     objectCoordinates.push_back(coordinate);
   }
 
+  //  Auto Ball Pickup
+  if(l_stick.GetRawButton(2) && pickupMode == 0){
+    pickupMode = 1;
+  }
+  else if(l_stick.GetRawButton(2) && pickupMode == 1){
+    pickupMode = 0;
+  }
+
+
+  for (auto i = 0; i < object_classes.size(); i++) {
+    if (object_classes[i] == "powercell" && pickupMode == 1) {
+      auto firstBallCoordinate = objectCoordinates[i];
+      auto firstBallX = firstBallCoordinate.first;
+      PID(firstBallX-640, );
+    }
+  }
+
   //???
   for (auto i = 0; i < object_classes.size(); i++) {
-    if (object_classes[i] == "") {
+    if (object_classes[i] == "powercell") {
       auto firstBallCoordinate = objectCoordinates[i];
       auto firstBallX = firstBallCoordinate.first;
       auto firstBallY = firstBallCoordinate.second;
       break;
     }
   }
+  #endif
 
   /*  THE CODE BELOW IS FOR FINDING SETPOINTS FOR PID
       COMMENT IT OUT UNLESS WE NEED TO REDO PID SETPOINTS */
