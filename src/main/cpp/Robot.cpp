@@ -245,7 +245,7 @@ void Robot::TeleopPeriodic() {
   }
 
   //Turret
-  turret.Set(logicontroller.GetZ);
+  turret.Set(logicontroller.GetRawAxis(2));
 
   //Lift
   if(logicontroller.GetRawButton(3)){
