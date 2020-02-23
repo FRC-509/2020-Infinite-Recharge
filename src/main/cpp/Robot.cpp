@@ -43,7 +43,7 @@ double elevPosition;
 double turretPosition;
 
 bool colorWheelUp = 1;
-bool elevBreakUp = 1;
+bool elevBrakeUp = 1;
 bool solUp = 1;
 
 //CONSTANTS & OTHER GLOBAL VARIABLES
@@ -101,8 +101,8 @@ frc::Solenoid intakeSolOpen { 0 };
 frc::Solenoid intakeSolClose { 1 };
 frc::Solenoid colorWheelSolOpen { 2 };
 frc::Solenoid colorWheelSolClose { 3 };
-frc::Solenoid elevBreakOpen { 4 };
-frc::Solenoid elevBreakClose { 5 };
+frc::Solenoid elevBrakeOpen { 4 };
+frc::Solenoid elevBrakeClose { 5 };
 
 
 //CONTROLLERS
@@ -152,6 +152,7 @@ void Robot::RobotInit() {
   rightBackFalcon.Set(ControlMode::PercentOutput, 0);
   l_shooter.Set(ControlMode::PercentOutput, 0);
   r_shooter.Set(ControlMode::PercentOutput, 0);
+  skywalker.Set(ControlMode::PercentOutput, 0);
   colorWheelMotor.Set(0);
   turret.Set(0);
   belt.Set(0);
@@ -223,14 +224,13 @@ void Robot::TeleopPeriodic() {
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   }
 
-  //DELCARE INTAKE AS - POWER, EXTAKE AS + POWER
   //Intake
   if (logicontroller.GetRawButton(5)){
-    MCGintake.Set(ControlMode::PercentOutput, conveyorSpeed);
+    MCGintake.Set(ControlMode::PercentOutput, -conveyorSpeed);
     cout << "MCGINTAKE ACTIVE";
   }
   else if (logicontroller.GetRawButton(7)){
-    MCGintake.Set(ControlMode::PercentOutput, -conveyorSpeed);
+    MCGintake.Set(ControlMode::PercentOutput, conveyorSpeed);
     cout << "MCGINTAKE REVERSED";
   }
   else {
@@ -238,13 +238,13 @@ void Robot::TeleopPeriodic() {
   }
 
   //Intake Solenoid
-  if(logicontroller.GetRawButton(2) && solUp == 0){
+  if(logicontroller.GetRawButtonPressed(2) && solUp == 0){
     solUp = 1;
     intakeSolOpen.Set(false);
     intakeSolClose.Set(true);
     cout << "SOLENOID UP";
   }
-  else if(logicontroller.GetRawButton(2) && solUp == 1){
+  else if(logicontroller.GetRawButtonPressed(2) && solUp == 1){
     solUp = 0;
     intakeSolOpen.Set(true);
     intakeSolClose.Set(false);
@@ -252,16 +252,31 @@ void Robot::TeleopPeriodic() {
   }
 
   //Color Wheel Solenoid
-  if(r_stick.GetRawButton(3) && colorWheelUp == 0){
+  if(r_stick.GetRawButtonPressed(3) && colorWheelUp == 0){
     colorWheelUp = 1;
     colorWheelSolOpen.Set(true);
     colorWheelSolClose.Set(false);
     cout << "COLOR WHEEL UP";
   }
-  else if(r_stick.GetRawButton(3) && colorWheelUp == 1){
+  else if(r_stick.GetRawButtonPressed(3) && colorWheelUp == 1){
     colorWheelUp = 0;
     colorWheelSolOpen.Set(false);
     colorWheelSolClose.Set(true);
+    cout << "COLOR WHEEL DOWN";
+  }
+
+  //Elevator Break Solenoid
+  if(r_stick.GetRawButtonPressed(2) && elevBrakeUp == 1){
+    elevBrakeUp = 0;
+    elevBrakeOpen.Set(true);
+    elevBrakeClose.Set(false);
+    cout << "ELEVATOR BREAK IN";
+  }
+  else if(r_stick.GetRawButtonPressed(2) && elevBrakeUp == 0){
+    elevBrakeUp = 1;
+    elevBreakOpen.Set(false);
+    elevBrakeClose.Set(true);
+    cout << "ELEVATOR BREAK OUT";
   }
 
   //Shooter
@@ -290,8 +305,6 @@ void Robot::TeleopPeriodic() {
   if(logicontroller.GetRawButton(4)){
     colorWheelMotor.Set(colorWheelPower);
   }
-
-  
 
   //Skywalker
   if(l_stick.GetRawButton(4)){
