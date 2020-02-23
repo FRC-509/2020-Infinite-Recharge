@@ -81,6 +81,7 @@ string pointTest = "";
 #define elevKp 0
 #define elevKi 0
 #define elevMaxVelocity 0.3
+#define elevMinVelocity 0.05
 double elevSetpoint;
 double elevPosition;
 double elevVelocity;
@@ -110,8 +111,10 @@ double horizontalOffset;
 bool shooting = 0;
 //    Number of Powercells in conveyor
 int powercells = 0;
-//    Starting Mode of Solenoid
-bool solUp = 1;
+//    Starting Mode of Solenoids
+bool intakeSolUp = 1;
+bool colorWheelSolUp = 1;
+bool elevBrakeSolUp = 1;
 //    Powercell Pickup mode (0 for manual, 1 for auto)
 bool pickupMode = 0;
 //    Shooter Calculations
@@ -163,6 +166,11 @@ frc::Compressor compressor { 0 };
 //One of these is up and the other is down ?
 frc::Solenoid intakeSolOpen { 0 };
 frc::Solenoid intakeSolClose { 1 };
+frc::Solenoid colorWheelSolOpen { 2 };
+frc::Solenoid colorWheelSolClose { 3 };
+frc::Solenoid elevBrakeSolOpen { 4 };
+frc::Solenoid elevBrakeSolClose { 5 };
+
 
 //Digital Sensors
 /*frc::DigitalInput sensorZero{3};
@@ -231,12 +239,15 @@ void colorWheel(){
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
   //Input of a button moves color wheel motor until the color of that button is detected.
-  if(logicontroller.GetRawButton(1)) {
+   if(logicontroller.GetRawButton(1)) {
     while(colorString != "Blue"){
       colorWheelMotor.Set(0.5);
       if(logicontroller.GetRawButton(9)){
         break;
       }
+    }
+    else {
+      colorWheelMotor.Set(0);
     }
   }
   if(logicontroller.GetRawButton(2)) {
@@ -246,6 +257,9 @@ void colorWheel(){
         break;
       }
     }
+    else {
+      colorWheelMotor.Set(0);
+    }
   }
   if(logicontroller.GetRawButton(3)) {
     while(colorString != "Red"){
@@ -254,6 +268,9 @@ void colorWheel(){
         break;
       }
     }
+    else {
+      colorWheelMotor.Set(0);
+    }
   }
   if(logicontroller.GetRawButton(4)) {
     while(colorString != "Yellow"){
@@ -261,6 +278,9 @@ void colorWheel(){
       if(logicontroller.GetRawButton(9)){
         break;
       }
+    }
+    else {
+      colorWheelMotor.Set(0);
     }
   }
 }
@@ -504,8 +524,6 @@ void Robot::TeleopPeriodic() {
     shooter(shooterRPM);
     shooting = 1;
     lltable->PutNumber("ledMode", 3);
-    //Hood Up
-    hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
     //Turret Control
     turret.Set(PID(horizontalOffset, turretKp, turretKi));
   }
@@ -513,38 +531,59 @@ void Robot::TeleopPeriodic() {
     shooter(0);
     shooting = 0;
     lltable->PutNumber("ledMode", 1);
-    //Hood Down
+  }
+
+  if(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi) > 0.25){
+    //Hood Up Capped Speed
+    hood.Set(0.25);
+  }
+  else if(PID(hoodDown-hoodPosition, hoodKp, hoodKi) < -0.25){
+    //Hood Down Capped Speed
+    hood.Set(-0.25);
+  }
+  else if (shooting == 1){
+    //Hood Up PID Controlled
+    hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
+  }
+  else if (shooting == 0){
+    //Hood Down PID Controlled
     hood.Set(PID(hoodDown-hoodPosition, hoodKp, hoodKi));
   }
 
-  //SOLENOIDS
-  //  Intake Solenoid
-  if(logicontroller.GetRawButton(5) && solUp == 0){
-    solUp = 1;
-    intakeSolOpen.Set(false);
-    intakeSolClose.Set(true);
+
+  //Elevator control
+  ///UNTESTED
+  ///NEEDS Ki, Kp
+
+  //  Velocity Control
+  elevVelocity = elevPoint.GetVelocity();
+  elevPosition = elevPoint.GetPosition();
+  if(PID(elevSetpoint - elevPosition, elevKp, elevKi) > elevMaxVelocity){
+    //Elevator Moves at MAX VELOCITY +
+    elevator.Set(elevMaxVelocity);
+    elevBrakeSolOpen.Set(false);
+    elevBrakeSolClose.Set(true);
   }
-  else if(logicontroller.GetRawButton(5) && solUp == 1){
-    solUp = 0;
-    intakeSolOpen.Set(true);
-    intakeSolClose.Set(false);
+  else if(PID(elevSetpoint - elevPosition, elevKp, elevKi) < elevMaxVelocity){
+    //Elevator Moves at MAX VELOCITY -
+    elevator.Set(-elevMaxVelocity);
+    elevBrakeSolOpen.Set(false);
+    elevBrakeSolClose.Set(true);
+  }
+  else if(abs(PID(elevSetpoint - elevPosition, elevKp, elevKi)) < elevMinVelocity){
+    //Elevator STOPS
+    elevator.Set(0);
+    elevBrakeSolOpen.Set(true);
+    elevBrakeSolClose.Set(false);
+  }
+  else {
+    //Elevator Moves at PID CONTROLLED VELOCITY
+    elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
+    elevBrakeSolOpen.Set(false);
+    elevBrakeSolClose.Set(true);
   }
 
-//Elevator control
-///UNTESTED
-///NEEDS Ki, Kp
-
-//  Velocity Control
-elevVelocity = elevPoint.GetVelocity();
-elevPosition = elevPoint.GetPosition();
-if(PID(elevSetpoint - elevPosition, elevKp, elevKi) > elevMaxVelocity){
-  elevator.Set(elevMaxVelocity);
-}
-else {
-  elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
-}
-//  PID Setpoint control
-elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
+  //  PID Setpoint control
   if(r_stick.GetRawButton(10)){
     //Extend Elevator
     elevSetpoint = elevUp;
@@ -573,6 +612,41 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
     turret.Set(0);
   }
   */
+
+  //SOLENOIDS
+  //  Intake Solenoid
+  if(logicontroller.GetRawButtonPressed(5) && solUp == 0){
+    solUp = 1;
+    intakeSolOpen.Set(false);
+    intakeSolClose.Set(true);
+  }
+  else if(logicontroller.GetRawButtonPressed(5) && solUp == 1){
+    solUp = 0;
+    intakeSolOpen.Set(true);
+    intakeSolClose.Set(false);
+  }
+  //  Color Wheel Solenoid
+  if(logicontroller.GetRawButtonPressed(9) && colorWheelSolUp == 0){
+    colorWheelSolUp = 1;
+    colorWheelSolOpen.Set(false);
+    colorWheelSolClose.Set(true);
+  }
+  else if(logicontroller.GetRawButtonPressed(9) && colorWheelSolUp == 1){
+    colorWheelSolUp = 0;
+    colorWheelSolOpen.Set(true);
+    colorWheelSolClose.Set(false);
+  }
+
+  //SKYWALKER
+  if(l_stick.GetRawButton(4)){
+    skywalker.Set(0.2);
+  }
+  else if(l_stick.GetRawButton(5)){
+    skywalker.Set(-0.2);
+  }
+  else {
+    skywalker.Set(0);
+  }
 
 
 #ifdef autoBallPickup
