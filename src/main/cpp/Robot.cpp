@@ -41,7 +41,7 @@ using namespace std;
 //  Comment out for Tank Drive
 #define arcadeDrive
 //  Comment out to Disable Auto Ball Pickup
-#define autoBallPickup
+//#define autoBallPickup
 //  Uncomment to control Auto Shooting with Machine Learning rather than the Limelight.
 //#define portML
 //  Uncomment to run Setpoint Configuration
@@ -120,6 +120,7 @@ TalonSRX leftBackFalcon = {1};
 TalonSRX rightFrontFalcon = {2};
 TalonSRX rightBackFalcon = {3};
 //Shooter
+// Right should be negative and left should be positive
 TalonSRX l_shooter = {4};
 TalonSRX r_shooter = {5};
 //MCGintake
@@ -208,7 +209,7 @@ void shooter(double rpm){
   //Convert Revolutions/Minute -> Units per 100ms
   //Revolutions/Minute * Units/Revolution (4096) = Units/Minute
   //Units/Minute * 1/600 = Units/100ms
-  if(horizontalOffset < minOffset){
+  /*if(horizontalOffset < minOffset){
     l_shooter.Set(ControlMode::Velocity, rpm * 4096 / 600);
     r_shooter.Set(ControlMode::Velocity, rpm * 4096 / 600);
 
@@ -217,7 +218,7 @@ void shooter(double rpm){
     lift2.Set(-liftPower);
     belt.Set(conveyorSpeed);
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
-  }
+  }*/
   //No Velocity control
   //l_shooter.Set(ControlMode::PercentOutput, -power);
   //r_shooter.Set(ControlMode::PercentOutput, power);
@@ -331,11 +332,37 @@ void Robot::AutonomousPeriodic() {
     // Default Auto goes here
   }
 }
+void shoot(double power) {
+    l_shooter.Set(ControlMode::PercentOutput, power);
+    r_shooter.Set(ControlMode::PercentOutput, -power);
+}
+void Robot::TeleopInit() {
 
-void Robot::TeleopInit() {}
+}
 
 void Robot::TeleopPeriodic() {
   //NetworkTable Data
+  hood.Set(-logicontroller.GetRawAxis(1));
+  turret.Set(logicontroller.GetRawAxis(0));
+  if(logicontroller.GetRawButton(1)){
+    shoot(1);
+  } else {
+    shoot(0);
+  }
+  if(logicontroller.GetRawButton(7)){
+    belt.Set(conveyorSpeed);
+    lift1.Set(liftPower);
+    lift2.Set(-liftPower);   
+  }else if(logicontroller.GetRawButton(5)){
+    belt.Set(-conveyorSpeed);
+    lift1.Set(-liftPower);
+    lift2.Set(liftPower);
+  }else {
+    belt.Set(0);
+    lift1.Set(0);
+    lift2.Set(0);
+  }
+  
   //Put Data
   frc::SmartDashboard::PutNumber("Number of Objects", table->GetNumber("nb_objects", 0));
   frc::SmartDashboard::PutStringArray("Object Types", table->GetStringArray("object_classes", {}));
@@ -370,7 +397,7 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
   //Input of a button moves color wheel motor until the color of that button is detected.
-  if(logicontroller.GetRawButton(1)) {
+  if(logicontroller.GetRawButton(9)) {
     while(colorString != "Blue"){
       colorWheelMotor.Set(0.5);
       if(logicontroller.GetRawButton(9)){
@@ -491,8 +518,9 @@ void Robot::TeleopPeriodic() {
   hoodPosition = hoodPoint.GetPosition();
   turretPosition = turretPoint.GetPosition();
   //Shooter Launch
-  if(logicontroller.GetRawButton(7)){
-    shooter(shooterRPM);
+  /*if(logicontroller.GetRawButton(7)){
+    //shooter(shooterRPM);
+    shooter(1);
     shooting = 1;
     lltable->PutNumber("ledMode", 3);
     //Hood Up
@@ -507,7 +535,7 @@ void Robot::TeleopPeriodic() {
     //Hood Down
     hood.Set(PID(hoodDown-hoodPosition, hoodKp, hoodKi));
   }
-
+  */
 
   //Intake Solenoid
   if(logicontroller.GetRawButton(5) && solUp == 0){
@@ -524,7 +552,7 @@ void Robot::TeleopPeriodic() {
 //Elevator control
 ///UNTESTED
 ///NEEDS Ki, Kp
-elevPosition = elevPoint.GetPosition();
+/*elevPosition = elevPoint.GetPosition();
 elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
   if(r_stick.GetRawButton(10)){
     //Extend Elevator
@@ -576,7 +604,7 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
     pickupMode = 0;
   }
 
-
+  /* don't work
   for (auto i = 0; i < object_classes.size(); i++) {
     if (object_classes[i] == "powercell" && pickupMode == 1) {
       auto firstBallCoordinate = objectCoordinates[i];
@@ -584,7 +612,7 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
       PID(firstBallX-640, );
     }
   }
-
+  */
   //???
   for (auto i = 0; i < object_classes.size(); i++) {
     if (object_classes[i] == "powercell") {
