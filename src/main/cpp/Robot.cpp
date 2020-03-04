@@ -96,7 +96,7 @@ double hoodPosition;
 double turretPosition;
 double horizontalOffset;
 //Turret Soft Stop
-#define turretMax 0
+#define turretMax 105
 
 //  State Tracking Variables
 //Is the shooter in use?
@@ -516,7 +516,7 @@ void Robot::TeleopPeriodic() {
   hoodSetpoint = hoodAngle * countRange / angleRange;
   //Update Encoders
   hoodPosition = hoodPoint.GetPosition();
-  turretPosition = turretPoint.GetPosition();
+  turretPosition = turretPoint.GetPosition() + 2.5;
   //Shooter Launch
   /*if(logicontroller.GetRawButton(7)){
     //shooter(shooterRPM);
@@ -572,13 +572,15 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
     elevator.Set(0);
   }
   */
+ frc::SmartDashboard::PutNumber("Turret Encoder", turretPoint.GetPosition());
   //Soft stop for Turret
-  /* NEEDS turretMax VALUE
-  / NEEDS turretMax VALUE
-  if(turretPoint >= turretMax || turretPoint <= -turretMax){
-    turret.Set(0);
+  // NEEDS turretMax VALUE
+  if(turretPosition >= turretMax){
+    turret.Set(-0.05);
+  } else if (turretPosition <= -turretMax){
+    turret.Set(0.05);
   }
-  */
+  
 
 #ifdef autoBallPickup
   //Auto Ball Pickup
@@ -623,6 +625,9 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
     }
   }
   #endif
+
+  
+  
 
   /*  THE CODE BELOW IS FOR FINDING SETPOINTS FOR PID
       COMMENT IT OUT UNLESS WE NEED TO REDO PID SETPOINTS */
