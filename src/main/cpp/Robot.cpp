@@ -52,7 +52,7 @@ string pointTest = "hood";
 
 //FUNCTIONAL
 //Power of Intake
-#define intakePower 0.5
+#define intakePower 1
 //Speed of conveyor
 #define conveyorSpeed 0.5
 //Limelight
@@ -95,9 +95,14 @@ double hoodPosition;
 #define minOffset 10
 double turretPosition;
 double horizontalOffset;
-//Turret Soft Stop
+//Elevator
+double elevatorPosition;
+//Turret Soft Stop + Hood Soft Stop
+double turretInit;
+double hoodInit;
+double elevatorInit;
 #define turretMax 105
-
+#define hoodMax -38
 //  State Tracking Variables
 //Is the shooter in use?
 bool shooting = 0;
@@ -105,6 +110,7 @@ bool shooting = 0;
 int powercells;
 //Starting Mode of Solenoid
 bool solUp = 1;
+bool bsolUp = 1;
 //Powercell Pickup mode (0 for manual, 1 for auto)
 bool pickupMode = 0;
 
@@ -136,7 +142,7 @@ rev::CANSparkMax lift1 { 9 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANSparkMax lift2 { 10 , rev::CANSparkMax::MotorType::kBrushless};
 //Elevator
 rev::CANSparkMax elevator { 11 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder elevPoint = elevator.GetEncoder();
+rev::CANEncoder elevatorPoint = elevator.GetEncoder();
 //Rotation of Shooter
 rev::CANSparkMax turret { 12 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANEncoder turretPoint = turret.GetEncoder();
@@ -151,7 +157,10 @@ frc::Compressor compressor { 0 };
 //One of these is up and the other is down ?
 frc::Solenoid intakeSolOpen { 0 };
 frc::Solenoid intakeSolClose { 1 };
-
+frc::Solenoid brakeSolOff { 4 };
+frc::Solenoid colorSolUp { 3 };
+frc::Solenoid brakeSolOn { 2 };
+frc::Solenoid colorSolDown { 5 };
 //Digital Sensors
 /*frc::DigitalInput sensorZero{3};
 frc::DigitalInput sensorOne{2};
@@ -220,8 +229,8 @@ void shooter(double rpm){
     frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
   }*/
   //No Velocity control
-  //l_shooter.Set(ControlMode::PercentOutput, -power);
-  //r_shooter.Set(ControlMode::PercentOutput, power);
+  l_shooter.Set(ControlMode::PercentOutput, -rpm);
+  r_shooter.Set(ControlMode::PercentOutput, rpm);
 }
 //Intake motors
 void intake(double power){
@@ -244,10 +253,15 @@ void Robot::RobotInit() {
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
- 
+  //home turret encoder
+  turretInit = turretPoint.GetPosition();
+  hoodInit = hoodPoint.GetPosition();
+  elevatorInit = elevatorPoint.GetPosition();
   //Turn of Limelight LED
   lltable->PutNumber("ledMode", 1);
 
+  //Shooter encoder reset
+  
   //Shooter current limiting
 
   /*l_shooter->EnableCurrentLimit(true); 
@@ -342,8 +356,6 @@ void Robot::TeleopInit() {
 
 void Robot::TeleopPeriodic() {
   //NetworkTable Data
-  hood.Set(-logicontroller.GetRawAxis(1));
-  turret.Set(logicontroller.GetRawAxis(0));
   if(logicontroller.GetRawButton(1)){
     shoot(1);
   } else {
@@ -397,6 +409,7 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
   //Input of a button moves color wheel motor until the color of that button is detected.
+  /*
   if(logicontroller.GetRawButton(9)) {
     while(colorString != "Blue"){
       colorWheelMotor.Set(0.5);
@@ -429,6 +442,7 @@ void Robot::TeleopPeriodic() {
       }
     }
   }
+  */
   //Display Number of Powercells
   /*powercells = sensorZero.Get()+sensorOne.Get()+sensorTwo.Get()+sensorThree.Get();
   frc::SmartDashboard::PutBoolean("zero", sensorZero.Get());
@@ -479,10 +493,10 @@ void Robot::TeleopPeriodic() {
   }
   //Intake control MANUAL BACKUP
   if (logicontroller.GetRawButton(6)){
-    intake(intakePower);
+    intake(-intakePower);
   }
   else if (logicontroller.GetRawButton(8)){
-    intake(-intakePower);
+    intake(intakePower);
   }
   else {
     intake(0);
@@ -516,7 +530,11 @@ void Robot::TeleopPeriodic() {
   hoodSetpoint = hoodAngle * countRange / angleRange;
   //Update Encoders
   hoodPosition = hoodPoint.GetPosition();
-  turretPosition = turretPoint.GetPosition() + 2.5;
+  hoodPosition = hoodPosition + hoodInit;
+  elevatorPosition = elevatorPoint.GetPosition();
+  elevatorPosition = elevatorPosition + elevatorInit;
+  turretPosition = turretPoint.GetPosition();
+  turretPosition = turretPosition - turretInit;
   //Shooter Launch
   /*if(logicontroller.GetRawButton(7)){
     //shooter(shooterRPM);
@@ -538,17 +556,31 @@ void Robot::TeleopPeriodic() {
   */
 
   //Intake Solenoid
-  if(logicontroller.GetRawButton(5) && solUp == 0){
+  if(logicontroller.GetRawButton(6) && solUp == 0){
     solUp = 1;
     intakeSolOpen.Set(false);
     intakeSolClose.Set(true);
   }
-  else if(logicontroller.GetRawButton(5) && solUp == 1){
+  else if(logicontroller.GetRawButton(8) && solUp == 1){
     solUp = 0;
     intakeSolOpen.Set(true);
     intakeSolClose.Set(false);
   }
 
+  if(r_stick.GetRawButton(3)){
+    brakeSolOff.Set(true);
+    brakeSolOn.Set(false);
+  } else {
+    brakeSolOff.Set(false);
+    brakeSolOn.Set(true);
+  }
+  if(r_stick.GetRawButton(2)){
+    colorSolUp.Set(true);
+    colorSolDown.Set(false);
+  } else {
+    colorSolUp.Set(false);
+    colorSolDown.Set(true);
+  }
 //Elevator control
 ///UNTESTED
 ///NEEDS Ki, Kp
@@ -572,15 +604,27 @@ elevator.Set(PID(elevSetpoint - elevPosition, elevKp, elevKi));
     elevator.Set(0);
   }
   */
- frc::SmartDashboard::PutNumber("Turret Encoder", turretPoint.GetPosition());
+ frc::SmartDashboard::PutNumber("Turret Encoder", turretPosition);
+ frc::SmartDashboard::PutNumber("Hood Encoder", hoodPosition);
+  frc::SmartDashboard::PutNumber("Elevator Encoder", elevatorPosition);
   //Soft stop for Turret
   // NEEDS turretMax VALUE
+  if(hoodPosition >= 0){
+    hood.Set(-0.2);
+  } else if (hoodPosition <= hoodMax){
+    hood.Set(0.2);
+  } else {
+    hood.Set(logicontroller.GetRawAxis(1));
+  }
   if(turretPosition >= turretMax){
     turret.Set(-0.05);
   } else if (turretPosition <= -turretMax){
     turret.Set(0.05);
+  } else {
+    turret.Set(logicontroller.GetRawAxis(0));
   }
-  
+  skywalker.Set(ControlMode::PercentOutput, logicontroller.GetRawAxis(2)); 
+  elevator.Set(logicontroller.GetRawAxis(3));
 
 #ifdef autoBallPickup
   //Auto Ball Pickup
