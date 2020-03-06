@@ -54,7 +54,7 @@ using namespace std;
 //Power of Intake
 #define intakePower 1
 //Speed of conveyor
-#define conveyorSpeed 0.5
+#define conveyorSpeed 0.25
 //Limelight
 #define limelightHeight 584.2
 #define limelightY 240
@@ -64,11 +64,12 @@ using namespace std;
 //Lift Properties
 #define liftPower 0.5
 //Hood Properties
-#define angleRange 15
+#define angleRange M_PI/12
 //Rpm of Shooter
 double shooterRPM;
 double targetDistance;
 double vFeetPerSecond;
+#define shooterAdjustment 1.05
 //Elevator
 double elevatorPosition;
 //Turret Soft Stop + Hood Soft Stop
@@ -94,8 +95,8 @@ double hoodAngle;
 double hoodSetpoint;
 double hoodPosition;
 //  Turret PID
-#define turretKp 0
-#define turretKi 0
+#define turretKp 0.06
+#define turretKi 0.005
 #define minOffset 10
 double turretPosition;
 double horizontalOffset;
@@ -106,6 +107,7 @@ double shooterInput;
 bool aiming = 0;
 //Number of Powercells
 int powercells;
+bool feed = 0;
 //Starting Mode of Solenoid
 bool intakeSolUp = 1;
 bool bsolUp = 1;
@@ -227,17 +229,18 @@ void shooter(double rpm){
   frc::SmartDashboard::PutString("SHOOTER:", "ACTIVE");
 
   //Units/Minute * 1/600 = Units/100ms
+  
   l_shooter.Set(ControlMode::Velocity, -1 * rpm * 4096/600);
   r_shooter.Set(ControlMode::Velocity, rpm * 4096/600);
-  hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
+  //hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
   if(horizontalOffset < minOffset){
     
 
     //load more balls
-    /*lift1.Set(liftPower);
+    lift1.Set(liftPower);
     lift2.Set(-liftPower);
     belt.Set(conveyorSpeed);
-    frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");*/
+    frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
   }
   else{
     /*lift1.Set(0);
@@ -256,8 +259,11 @@ void intake(double power){
 }
 
 
+
+
 //Upon robot startup
 void Robot::RobotInit() {
+  
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
@@ -373,30 +379,49 @@ void Robot::TeleopPeriodic() {
     elevator.Set(logicontroller.GetRawAxis(3));
   }
   //  Shoot
-  
-  if(logicontroller.GetRawButton(1)){
-    //shoot(1);
+  if(logicontroller.GetRawButtonPressed(3) && aiming == 0){
     aiming = 1;
-    shooter(shooterInput);
-  } else if(logicontroller.GetRawButton(2)){
+    frc::SmartDashboard::PutString("targeting", "active");
+  } else if(logicontroller.GetRawButtonReleased(3) && aiming == 1) {
+    aiming = 0;
+    frc::SmartDashboard::PutString("targeting", "inactive");
+  } else {
+    
+  }
+  if(logicontroller.GetRawButton(4)){
+    //shoot(1);
+    //aiming = 1;
+    if(0 < targetDistance < 100){
+      shooter((-shooterInput*(shooterAdjustment)));
+    } else {
+      shoot(0.2);
+    }
+    feed = 1;
+  } else {
+    shooter(0);
+    frc::SmartDashboard::PutString("SHOOTER:", "ACTIVE");
+    feed = 0;
+  } 
+  /*
+  if(logicontroller.GetRawButton(2)){
     //shoot(-0.5);
     belt.Set(-conveyorSpeed);
     lift1.Set(-liftPower);
     lift2.Set(liftPower);
-  } else if(logicontroller.GetRawButton(4)){
-    belt.Set(conveyorSpeed);
-    lift1.Set(liftPower);
-    lift2.Set(-liftPower);
-  } else if(logicontroller.GetRawButton(3)){
-    
+  } else if(logicontroller.GetRawButton(1)){
+    belt.Set(0.25);
+    lift1.Set(0.25);
+    lift2.Set(-0.25);
+    frc::SmartDashboard::PutString("SHOOTER:", "ACTIVE");
   } else {
-    shooter(0);
+
     belt.Set(0);
     lift1.Set(0);
     lift2.Set(0);
-    aiming = 0;
+
     frc::SmartDashboard::PutString("SHOOTER:", "INACTIVE");
   }
+  */
   /*
   //  Conveyor/lift
   if(logicontroller.GetRawButton(7)){
@@ -484,17 +509,15 @@ void Robot::TeleopPeriodic() {
   //Automatic Conveyor Belt Control
   frc::SmartDashboard::PutBoolean("Exit Sensor", sensorExit.Get());
   frc::SmartDashboard::PutBoolean("Intake Sensor", sensorIntake.Get());
-  /*
-  if(sensorIntake.Get() == 0){
-    frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
-    belt.Set(conveyorSpeed);
+  if(sensorIntake.Get() == 0 && sensorExit.Get() != 0){
+      frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
+      belt.Set(conveyorSpeed);
   }
   if(sensorIntake.Get() == 1 && aiming == 0) {
-    belt.Set(0);
-    frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
+      belt.Set(0);
+      frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
   }
-  */
-  
+  frc::SmartDashboard::PutBoolean("shooting", feed);
 
   // MOVEMENT
   #ifdef arcadeDrive
@@ -535,7 +558,7 @@ void Robot::TeleopPeriodic() {
   //targetDistance = 304.8*((focalLength*outerPortH*limelightY)/((llPortH)*limelightHeight))+innerPortDepth;
   double targetArea = lltable->GetNumber("ta", 0);
   frc::SmartDashboard::PutNumber("target area", targetArea);
-  targetDistance = 10+2.5;
+  targetDistance = ((16.5)*(pow(targetArea, -.71)));
   horizontalOffset = lltable->GetNumber("tx", 0);
   frc::SmartDashboard::PutNumber("distance", targetDistance);
 
@@ -543,14 +566,16 @@ void Robot::TeleopPeriodic() {
   //  Getting RPM
   hoodAngle = atan((2*(73/12))/targetDistance);
   frc::SmartDashboard::PutNumber("angle", hoodAngle);
+  frc::SmartDashboard::PutNumber("angle degrees", ((hoodAngle/M_PI)/180));
   vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
   frc::SmartDashboard::PutNumber("Speed(ft/s", vFeetPerSecond);
   shooterRPM = 2*(vFeetPerSecond*(60*12))/(4*M_PI);
-  shooterInput = shooterRPM/(2.5);
+  //messed up
+  shooterInput = shooterRPM/(1.25);
   frc::SmartDashboard::PutNumber("shooter RPM", shooterRPM);
   //  Convert Angle to Encoder Counts
   //    38 Counts ~ 15 Degrees
-  hoodSetpoint = hoodAngle * -hoodMax / angleRange;
+  hoodSetpoint = hoodAngle * hoodMax / angleRange;
   //  Update Encoders
   hoodPosition = hoodPoint.GetPosition();
   hoodPosition = hoodPosition - hoodInit;
@@ -559,23 +584,8 @@ void Robot::TeleopPeriodic() {
   turretPosition = turretPoint.GetPosition();
   turretPosition = turretPosition - turretInit;
   //Shooter Launch
-  if(aiming == 1){
-    //shooter(shooterRPM);
-    //shooter(1);
-    //aiming = 1;
-    //lltable->PutNumber("ledMode", 3);
-    //Hood Up
-    
-    //Turret Control
-    //turret.Set(PID(horizontalOffset, turretKp, turretKi));
-  }
-  else {
-    //shooter(0);
-    aiming = 0;
-    lltable->PutNumber("ledMode", 1);
-    //Hood Down
-    //hood.Set(PID(hoodDown-hoodPosition, hoodKp, hoodKi));
-  }
+  frc::SmartDashboard::PutNumber("aiming", aiming);
+  
   //Running Intake Motors
   if(logicontroller.GetRawButton(5)){
     intake(intakePower);
@@ -640,20 +650,41 @@ elevator.Set(PID(elevatorSetPoint - , elevatorKp, elevatorKi));
   }
   */
   //  Soft stop for Hood
-  if(hoodPosition >= 0){
+  if(hoodPosition >= 0.5){
     hood.Set(-0.2);
   } else if (hoodPosition <= hoodMax){
     hood.Set(0.2);
   } else {
-    //hood.Set(0.2 * logicontroller.GetRawAxis(1));
+    if(aiming == 0){
+      hood.Set(0.2 * logicontroller.GetRawAxis(1));
+    } else {
+      hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
+    }
   }
+  //temp test
+  //hood.Set(-logicontroller.GetRawAxis(1));
   //  Soft stop for Turret
   if(turretPosition >= turretMax){
     turret.Set(-0.05);
   } else if (turretPosition <= -turretMax){
     turret.Set(0.05);
   } else {
-    turret.Set(0.25 * logicontroller.GetRawAxis(0));
+    if(aiming == 1){
+    //shooter(shooterRPM);
+    //shooter(1);
+
+      lltable->PutNumber("ledMode", 3);
+    //Hood Up
+    
+    //Turret Control
+    turret.Set(-(PID(horizontalOffset, turretKp, turretKi)));
+    } else {
+    //shooter(0);
+      lltable->PutNumber("ledMode", 1);
+      turret.Set(0.25*-logicontroller.GetRawAxis(0));
+    //Hood Down
+    //hood.Set(PID(hoodDown-hoodPosition, hoodKp, hoodKi));
+    }
   }
 
   //Skywalker Control
