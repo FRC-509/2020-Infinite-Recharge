@@ -527,7 +527,12 @@ bool aiming(double turretPosition, double hoodPosition){
   frc::SmartDashboard::PutBoolean("aimed?", aimed);
 }
 double shooterSpeed(){
-
+  double hoodAngle;
+  hoodAngle = atan((2*(73/12))/distanceCalculator());
+  //hoodAngle in radians
+  vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
+  shooterInput = shooterRPM/(1.25);
+  frc::SmartDashboard::PutNumber("feet per second", vFeetPerSecond);
 }
 //shooter functionality
 void shooterSubsystem(int mode, bool shootCommand, bool aimCommand){
@@ -994,15 +999,14 @@ void Robot::TeleopPeriodic() {
   
 
 //   frc::SmartDashboard::PutNumber("hood setpoint", hoodSetpoint);
-  vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
-  frc::SmartDashboard::PutNumber("Speed(ft/s", vFeetPerSecond);
-  shooterRPM = 2*(vFeetPerSecond*(60*12))/(4*M_PI);
+
+
   //messed up
-  shooterInput = shooterRPM/(1.25);
-  frc::SmartDashboard::PutNumber("shooter RPM", shooterRPM);
+  
+  //frc::SmartDashboard::PutNumber("shooter RPM", shooterRPM);
   //  Convert Angle to Encoder Counts
   //    38 Counts ~ 15 Degrees
-  hoodSetpoint = hoodAngle * hoodMax / angleRange;
+  //hoodSetpoint = hoodAngle * hoodMax / angleRange;
 
   //Shooter Launch
   //frc::SmartDashboard::PutNumber("aiming", aiming);
@@ -1024,7 +1028,6 @@ void Robot::TeleopPeriodic() {
   } else {
     elevator.Set(logicontroller.GetRawAxis(3));
   }  
-  
   //Skywalker Control
   skywalker.Set(ControlMode::PercentOutput, logicontroller.GetRawAxis(2)); 
 
@@ -1046,103 +1049,6 @@ elevator.Set(PID(elevatorSetPoint - , elevatorKp, elevatorKi));
     elevatorSetPoint = elevatorDown;
   }
   */
-  
-  
-
-  //SOFT STOPS
-  //  Soft stop for Elevator
-  //  NEEDS elevatorUp AND elevatorDown VALUE
-  /*
-  if (elevatorPosition > elevatorUp || elevatorPosition < elevatorDown){
-    elevator.Set(0);
-  }
-  */
-  //  Soft stop for Hood
-  /*
-  if(hoodPosition >= -0.5){
-    hood.Set(-0.2);
-  } else if (hoodPosition <= hoodMax){
-    hood.Set(0.2);
-  } else {
-    if(aiming == 0){
-      hood.Set(0.2 * logicontroller.GetRawAxis(1));
-    } else {
-      hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
-    }
-  }
-  */
-  //temp test
-  //hood.Set(-logicontroller.GetRawAxis(1));
-  
-  //  Soft stop for Turret
-  /*
-  if(turretPosition >= turretMax){
-    turret.Set(-0.05);
-  } else if (turretPosition <= -turretMax){
-    turret.Set(0.05);
-  } else {
-    if(aiming == 1){
-    //shooter(shooterRPM);
-    //shooter(1);
-
-      lltable->PutNumber("ledMode", 3);
-    //Hood Up
-    hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
-    //Turret Control
-    turret.Set(-(PID(horizontalOffset, turretKp, turretKi)));
-    } else {
-    //shooter(0);
-      lltable->PutNumber("ledMode", 1);
-      //
-    //Hood Down
-    //hood.Set(PID(hoodDown-hoodPosition, hoodKp, hoodKi));
-    }
-  }*/
-    
-#ifdef autoBallPickup
-  //Auto Ball Pickup
-  ///UNTESTED
-  ///INCOMPLETE
-  
-  //Variable to store object center coordinate
-  vector< pair<double, double> > objectCoordinates = {};
-  //For each object, average the coordinates into a center coordinate. Push this to objectCoordinates.
-  for (auto i = 0; i < boxes.size(); i += 4) {
-    /* [top_left__x1, top_left_y1, bottom_right_x1, bottom_right_y1, top_left_x2, top_left_y2, … ] */
-    auto centerX = (boxes[i+0] + boxes[i+2]) / 2;
-    auto centerY = (boxes[i+1] + boxes[i+3]) / 2;
-    auto coordinate = make_pair(centerX, centerY);
-    objectCoordinates.push_back(coordinate);
-  }
-
-    //  Auto Ball Pickup
-  if(l_stick.GetRawButton(2) && pickupMode == 0){
-    pickupMode = 1;
-  }
-  else if(l_stick.GetRawButton(2) && pickupMode == 1){
-    pickupMode = 0;
-  }
-
-  /* don't work
-  for (auto i = 0; i < object_classes.size(); i++) {
-    if (object_classes[i] == "powercell" && pickupMode == 1) {
-      auto firstBallCoordinate = objectCoordinates[i];
-      auto firstBallX = firstBallCoordinate.first;
-      PID(firstBallX-640, );
-    }
-  }
-  */
-  //???
-  for (auto i = 0; i < object_classes.size(); i++) {
-    if (object_classes[i] == "powercell") {
-      auto firstBallCoordinate = objectCoordinates[i];
-      auto firstBallX = firstBallCoordinate.first;
-      auto firstBallY = firstBallCoordinate.second;
-      break;
-    }
-  }
-  #endif
-
   /*  THE CODE BELOW IS FOR FINDING SETPOINTS FOR PID
       COMMENT IT OUT UNLESS WE NEED TO REDO PID SETPOINTS */
   #ifdef TestSetpoints
