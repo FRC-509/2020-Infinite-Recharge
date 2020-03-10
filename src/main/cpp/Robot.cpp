@@ -32,8 +32,26 @@
 #include <wpi/Path.h>
 #include <wpi/SmallString.h>
 #include <frc/WPILib.h>
+#include <cameraserver/CameraServer.h>
+#include <vision/VisionRunner.h>
 
 using namespace std;
+
+
+//GLOBAL VARIABLES
+
+//CONFIGURATION
+//  Comment out for Tank Drive
+#define arcadeDrive
+//  Comment to disable Encoder output in SmartDashboard
+#define TestSetpoints
+//  Comment out to Disable Auto Ball Pickup
+//#define autoBallPickup
+//  Uncomment to control Auto aiming with Machine Learning rather than the Limelight.
+//#define portML
+
+
+//CONSTANTS & OTHER GLOBAL VARIABLES
 
 //FUNCTIONAL
 //Power of Intake
@@ -45,17 +63,19 @@ using namespace std;
 //Hood Properties
 #define angleRange M_PI/12
 //Rpm of Shooter
-double shooterRPM = 0;
+double shooterRPM = std::clamp(0, 0, 8000);
 double targetDistance;
 double vFeetPerSecond;
 #define shooterAdjustment 1.05
-double shooterInput;
+//Elevator
+double elevatorPosition;
 //Turret Soft Stop + Hood Soft Stop
 double turretInit;
 double hoodInit;
 double elevatorInit;
 #define turretMax 105
 #define hoodMax -40
+#define hoodMin 0
 
 //PID
 //  Elevator PID
@@ -64,7 +84,6 @@ double elevatorInit;
 #define elevatorIntermediate 0
 #define elevatorKp 0
 #define elevatorKi 0
-double elevatorPosition;
 double elevatorSetPoint;
 //  Hood PID
 #define hoodDown 0
@@ -80,13 +99,13 @@ double hoodPosition;
 #define turretDefaultSetpoint 0
 double turretPosition;
 double horizontalOffset;
+double shooterInput;
+
+//Input Tracking
+double turretInput;
+double hoodInput;
 
 //  State Tracking Variables
-//Is the shooter in use?
-bool aiming = 0;
-//Number of Powercells
-int powercells;
-bool feed = 0;
 //Starting Mode of Solenoid
 bool intakeSolUp = 1;
 bool bsolUp = 1;
@@ -96,7 +115,6 @@ bool pickupMode = 0;
 int shooterMode = 0;
 
 int LEDPWM;
-
 
 
 //MOTORS
@@ -130,10 +148,10 @@ rev::CANSparkMax elevator { 11 , rev::CANSparkMax::MotorType::kBrushless};
 rev::CANEncoder elevatorPoint = elevator.GetEncoder();
 //Rotation of Shooter
 rev::CANSparkMax turret { 12 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder turretPoint = turret.GetEncoder();
+rev::CANEncoder turretEncoder = turret.GetEncoder();
 //Hood controls angle of Shooter
 rev::CANSparkMax hood { 13 , rev::CANSparkMax::MotorType::kBrushless};
-rev::CANEncoder hoodPoint = hood.GetEncoder();
+rev::CANEncoder hoodEncoder = hood.GetEncoder();
 //Conveyor Belt and Lift
 rev::CANSparkMax belt { 14 , rev::CANSparkMax::MotorType::kBrushless};
 
@@ -148,7 +166,6 @@ frc::Solenoid brakeSolOff { 4 };
 frc::Solenoid colorSolUp { 3 };
 frc::Solenoid brakeSolOn { 2 };
 frc::Solenoid colorSolDown { 5 };
-
 //Digital Sensors
 frc::DigitalInput sensorIntake{1};
 frc::DigitalInput sensorExit{0};
@@ -183,36 +200,13 @@ static constexpr frc::Color kYellowTarget = frc::Color(0.361, 0.524, 0.113);
 
 //FUNCTIONS
 
-//  Cotangent
+//Cotangent
 double cotan(double i){
   return 1/tan(i);
 }
 
-//  PID
-double PID(double error, double Kp, double Ki){
-  double p;
-  double i;
-  double integral;
-
-  integral += error;
-  p = Kp*error;
-  i = Ki*integral;
-  return p+i;
-}
-
-//  Soft Stop Function (true should stop)
-bool softStop(float max, float min, float desired){
-  if (desired >= max && desired > 0){
-    return true;
-  } else if (desired <= min && desired <0){
-    return true;
-  } else {
-    return false;
-  }
-}
-
-//  Drive Functions
-//    Sync left and right wheel motors
+//Drive Functions
+//  Sync left and right wheel motors
 void leftDrive(double power){
   leftFrontFalcon.Set(ControlMode::PercentOutput, power);
   leftBackFalcon.Set(ControlMode::PercentOutput, power);
@@ -221,27 +215,15 @@ void rightDrive(double power){
   rightFrontFalcon.Set(ControlMode::PercentOutput, -power);
   rightBackFalcon.Set(ControlMode::PercentOutput, -power);
 }
-//    Drive smoothing
+//  Drive smoothing
 float driveCurve(float input){
   float output;
   float linearity = 0.5;
   output = linearity * input + (1-linearity) * pow(input, 3);
   return output;
 }
-
-//  Motor Syncing
-//Sync Intake motors
-void intake(double power){
-  MCGintake.Set(ControlMode::PercentOutput, -power);
-}
-//Sync Shooter Motors
-void syncShooters(double input){
-  l_shooter.Set(ControlMode::Velocity, input * (shooterAdjustment) * 4096/600);
-  r_shooter.Set(ControlMode::Velocity, -1 * input * (shooterAdjustment) * 4096/600);
-}
-
-void drive(float left, float right, bool intaking, bool reverse, bool extaking){
-
+//  Combined Drive Function
+void drive(float left, float right, bool intaking, bool reverse){
   //driving
   if (!reverse){
     leftDrive(driveCurve(left) - driveCurve(right));
@@ -253,109 +235,357 @@ void drive(float left, float right, bool intaking, bool reverse, bool extaking){
 
   //intaking
   if (intaking){
-    intake(intakePower);
-  } else if (extaking){
-    intake(-intakePower);
+    intakeSolUp = 1;
+    intake(intakePower, intakeSolUp);
   } else {
-    intake(0);
+    intakeSolUp = 0;
+    intake(0, intakeSolUp);
   }
-
+  //Output Intake Position to SmartDashboard
+  frc::SmartDashboard::PutBoolean("Intake Down?", intakeSolUp);
+}
+//Intake motors
+void intake(double power, bool intakeSol){
+  //Setting intake power
+  MCGintake.Set(ControlMode::PercentOutput, -power);
+  //Setting intake position
+  if (intakeSol){
+    intakeSolOpen.Set(false);
+    intakeSolClose.Set(true);
+  } else {
+    intakeSolOpen.Set(true);
+    intakeSolClose.Set(false);
+  }
+}
+//Sync Shooter Motors
+bool syncShooters(double input){
+  l_shooter.Set(ControlMode::Velocity, input * (shooterAdjustment) * 4096/600);
+  r_shooter.Set(ControlMode::Velocity, -1 * input * (shooterAdjustment) * 4096/600);
+  if (input > 0 || input < 0){
+    return true;  
+  } else {
+    return false;
+  }
+}
+//Sync and reverse a kicker motor
+void syncLift(double input){
+    lift1.Set(input);
+    lift2.Set(-input);
 }
 
+//PID
+double PID(double error, double Kp, double Ki){
+  double p;
+  double i;
+  double integral;
 
-
-//Turret Direction Tracking and Setting Values
-void turretSet(double error){
+  integral += error;
+  p = Kp*error;
+  i = Ki*integral;
+  return p+i;
+}
+//Soft Stop Function (true should stop)
+bool softStop(float max, float min, double motorInput, double motorPosition){
+  if ((motorInput >= max && motorPosition > 0) || (motorInput <= min && motorPosition < 0)){
+    return true;
+  } else {
+    return false;
+  }
+}
+//Turret Movement
+void turretSet(double input){
   
-  if (softStop(turretMax, -turretMax, error)){
+  bool atSoftStop;
+    
+  if (softStop(turretMax, -turretMax, input, turretPosition)){
     turret.Set(0);
+    atSoftStop = 1;
   } else {
-    turret.Set(PID(error, turretKp, turretKi));
+    turret.Set(PID(horizontalOffset, turretKp, turretKi));
+    atSoftStop = 0;
   }
-  
-  // //If Turret is too far to Positive Direction, only accept Negative input
-  // if(turretPosition >= turretMax && PID(error, turretKp, turretKi) > 0){
-  //   turret.Set(0);
-  // }
-  // //If Turret is too far to Negative Direction, only accept Positive input
-  // else if(turretPosition <= -turretMax && PID(error, turretKp, turretKi) < 0) {
-  //   turret.Set(0);
-  // }
-  // //Set the turret to PID at Setpoint
-  // else {
-  //   turret.Set(PID(error, turretKp, turretKi));
-  // }
-}
-void hoodSet(double error){
-  if(hoodPosition >= hoodDown && PID(error, hoodKp, hoodKi) > 0){
-    hood.Set(0);
-  }
-  else if (hoodPosition <= hoodMax && PID(error, hoodKp, hoodKi) < 0){
-    hood.Set(0);
-  }
-  else{
-    hood.Set(PID(error, hoodKp, hoodKi));
-  }
-}
-void shooterSubsystem(int mode){
-  
-  //turretSet(turretError);
 
+  frc::SmartDashboard::PutBoolean("Turret at soft stop?", atSoftStop);
+}
+//Hood Movement
+void hoodSet(double input){
+  
+  bool atSoftStop;
+    
+  if (softStop(hoodMax, hoodMin, input, hoodPosition)){
+    hood.Set(0);
+    bool atSoftStop = 1;
+  } else {
+    hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
+    bool atSoftStop = 0;
+  }
+  
+  frc::SmartDashboard::PutBoolean("Hood at soft stop?", atSoftStop);
+}
+
+//Turn Limelight LED on or off
+bool limelightOn(bool ledState){
+    if(ledState){
+      lltable->PutNumber("ledMode", 3);
+    } else {
+      lltable->PutNumber("ledMode", 1);
+    }
+}
+
+bool limelightTargetAquired(){
+    bool targetAquired;
+    targetAquired = lltable->GetNumber("tv", 0);
+    if (targetAquired == 1){
+      return true;
+    } else {
+      return false;
+    }
+}
+
+//Limelight Output Function
+float limelightOutput(int desiredOutput){
+    
+    bool errorState;
+    
+    float targetHorizontalDisplacement;
+    float targetHeight;
+    float targetArea; //in percent(1% = 1)    
+    switch(desiredOutput){
+      //outputting target x value
+      case 0:
+          targetHorizontalDisplacement = lltable->GetNumber("tx", 0);
+          return targetHorizontalDisplacement;
+          errorState = 0;
+          break;
+      //outputting target y value
+      case 1:
+          targetHeight = lltable->GetNumber("ty", 0);
+          return targetHeight;
+          errorState = 0;
+          break;
+      //outputting target area value(only used for inaccurate distance aquisition)
+      case 2:
+          targetArea = lltable->GetNumber("ta", 0);
+          return targetArea;
+          errorState = 0;
+          break;
+      case 3:
+          
+      default:
+          errorState = 1;
+          break;
+
+    }
+    frc::SmartDashboard::PutBoolean("Limelight Output Error?", errorState);
+}
+
+double distanceCalculator(){
+  
+  double targetArea;
+  targetArea = limelightOutput(2);
+  //distance by target area(needs work)
+  targetDistance = ((18)*(pow(targetArea, -.509)));
+  return targetDistance;
+ 
+}        
+
+
+        
+void conveyor(int mode){
+  bool conveyor;
+  bool manual;
+  bool errorState;
   switch(mode){
-    //Intake
+    //auto control(normal)
     case 0:
       if(!sensorIntake.Get() && sensorExit.Get()){
-        frc::SmartDashboard::PutString("CONVEYOR BELT:", "ACTIVE");
         belt.Set(conveyorSpeed);
-      }
-      else {
-        frc::SmartDashboard::PutString("CONVEYOR BELT:", "INACTIVE");
+        conveyor = 1;
+      } else {
         belt.Set(0);
+        conveyor = 0;
       }
-      lift1.Set(0);
-      lift2.Set(0);
-      syncShooters(0);
-      break;
-    //Spit
+      syncLift(0);
+      manual = 0;
+      errorState = 0;
+      break;      
+    //shoot(going towards shooter)
     case 1:
-      belt.Set(-conveyorSpeed*2);
-      lift1.Set(-liftPower);
-      lift2.Set(liftPower);
-      frc::SmartDashboard::PutString("Spitting", "true");
-      syncShooters(0);
-      break;
-    //Shooting
-    case 2:
-      frc::SmartDashboard::PutString("SHOOTER:", "ACTIVE");
-      syncShooters(shooterInput);
-      lift1.Set(liftPower);
-      lift2.Set(-liftPower);
       belt.Set(conveyorSpeed);
+      syncLift(liftPower);
+      manual = 0;
+      errorState = 0;
+      break;
+    //poot(going towards intake)
+    case 2:
+      belt.Set(-conveyorSpeed);
+      syncLift(-liftPower);
+      manual = 0;
+      errorState = 0;
+      break;
+    //manual control (uncomplete)
+    case 3:
+      belt.Set(logicontroller.GetRawAxis(2));
+      syncLift(logicontroller.GetRawAxis(2));
+      manual = 1;
+      errorState = 0;
+      break;
+    default:
+      errorState = 1;
       break;
   }
+    
+    //output
+    frc::SmartDashboard::PutBoolean("Conveyor Belt On?:", conveyor);
+    frc::SmartDashboard::PutBoolean("Manual Control On?:", manual);
+    frc::SmartDashboard::PutBoolean("Full?", !sensorExit.Get());
+}
+//turretTracking function, outputs true if at position
+bool turretTracking(){
+  turretSet(horizontalOffset);
+  if (5 <= horizontalOffset && horizontalOffset <= 5){
+    return true;
+  } else {
+    return false;
+  }
+}
+//hoodTracking function, outputs true if at position    
+bool hoodTracking(){
+  double hoodTarget;
+  double error;
+  hoodTarget = atan((2*(73/12))/distanceCalculator());
+  hoodSet(hoodTarget - hoodPosition);
+  if (-0.1 <= error && error <= 0.1){
+    return true;  
+  } else {
+    return false;
+  }  
+}
+//aiming function(aims, and outputs if it's aimed)
+bool aiming(){
+  
+  bool aimed;
+    
+  if ((turretTracking()) && hoodTracking()){
+    aimed = 1;
+    return aimed;
+  } else {
+    aimed = 0;
+    return aimed;
+  }
+  frc::SmartDashboard::PutBoolean("aimed?", aimed);
+}
+double shooterSpeed(){
+  double hoodAngle;
+  hoodAngle = atan((2*(73/12))/distanceCalculator());
+  //hoodAngle in radians
+  vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
+  shooterInput = shooterRPM/(1.25);
+  frc::SmartDashboard::PutNumber("feet per second", vFeetPerSecond);
+}
+//shooter functionality
+void shooterSubsystem(int mode, bool shootCommand, bool aimCommand){
+  bool manualControl;
+  bool conveyorOn;
+  bool spitting;
+  bool shooterOn;
+    
+  bool targetFound;
+  targetFound = limelightTargetAquired();  
+    
+  double shooterInput;
+  shooterInput = shooterSpeed();
+  
+  switch(mode){
+    
+    //Intake
+    case 0:
+      conveyor(0);
+      manualControl = 0;
+      break;
+    //Shooting
+    case 1:
+      conveyor(1);
+      if(aiming() && shootCommand){
+        syncShooters(shooterInput);
+      } else {
+        syncShooters(0);
+      }
+      manualControl = 0;
+      break;
+    //Spit
+    case 2:
+      shooterOn = syncShooters(0);
+      conveyor(2);
+      manualControl = 0;
+      break;
+    //"Manual Control"
+    case 3:
+      turretSet(logicontroller.GetRawAxis(0));
+      hoodSet(logicontroller.GetRawAxis(1));
+      conveyor(3);
+      shooterOn = syncShooters(3250);
+      manualControl = 1;
+      break;    
+  }
+  
+  if ((aiming() || manualControl) && shootCommand){
+    if(manualControl){    
+      shooterOn = syncShooters(3250);
+      conveyor(conveyorSpeed);
+      conveyorOn = true;
+    } else {
+      shooterOn = syncShooters(shooterInput);
+      conveyor(conveyorSpeed);
+      conveyorOn = true;
+    }
+  } else {
+    syncShooters(0);
+    conveyorOn = false;
+  }
+  //smart dashboard output
+  frc::SmartDashboard::PutBoolean("SHOOTER ON?:", shooterOn);
+  frc::SmartDashboard::PutBoolean("Manual Control?", manualControl);
+  frc::SmartDashboard::PutBoolean("CONVEYOR BELT:", conveyorOn);
 }
 
 //Upon robot startup
-void teleop(int shooterMode, bool override){
+void teleop(int shooterMode, bool shooting, bool aiming, bool override){
   if (!override){
-    shooterSubsystem(shooterMode);
+    shooterSubsystem(shooterMode, shooting, aiming);
     //elevator();
     //colorWheel();
   } else {
+    shooterSubsystem(3, shooting, aiming);
     //override();
   }
 }
 void Robot::RobotInit() {
-  //Current Limiting
+  //CURRENT LIMITING
+    
+  //Current Limiting SparkMAX
   lift1.SetSmartCurrentLimit(10);
   lift2.SetSmartCurrentLimit(10);
+  belt.SetSmartCurrentLimit(10);
+  turret.SetSmartCurrentLimit(10);
+  hood.SetSmartCurrentLimit(10);
+  elevator.SetSmartCurrentLimit(40);
+  colorWheelMotor.SetSmartCurrentLimit(10);
+  
+  //Current Limiting Falcons + Intake (WIP)
+    
+    
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
   frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
-  //home turret encoder
-  turretInit = turretPoint.GetPosition();
-  hoodInit = hoodPoint.GetPosition();
+  //home turret encoder(put on checklist)
+  turretInit = turretEncoder.GetPosition();
+  hoodInit = hoodEncoder.GetPosition();
   elevatorInit = elevatorPoint.GetPosition();
+  //  Update Encoders
+  turretPosition = turretEncoder.GetPosition() - turretInit;
+  hoodPosition = hoodEncoder.GetPosition() - hoodInit;
+  elevatorPosition = elevatorPoint.GetPosition() - elevatorInit;
   //Turn off Limelight LED
   lltable->PutNumber("ledMode", 1);
 
@@ -391,6 +621,21 @@ void Robot::RobotInit() {
   m_colorMatcher.AddColorMatch(kGreenTarget);
   m_colorMatcher.AddColorMatch(kRedTarget);
   m_colorMatcher.AddColorMatch(kYellowTarget);
+ 
+ //Adding Camera Feeds
+ cs::UsbCamera usbcamera = frc::CameraServer::GetInstance()->StartAutomaticCapture();
+ cs::UsbCamera usbcamera2 = frc::CameraServer::GetInstance()->StartAutomaticCapture();
+ 
+ //usbcamera.SetResolution(720, 480);
+ //usbcamera.SetResolution(500, 480);
+ //usbcamera.SetResolution(480,320);
+ usbcamera.SetResolution(1,1);
+ usbcamera.SetFPS(25);
+ // frc::SmartDashboard::PutNumber("Resolution: ", usbcamera.getResolution());
+
+ usbcamera2.SetResolution(1,1);
+ usbcamera2.SetFPS(25);
+
 }
 
 /**
@@ -445,87 +690,33 @@ void Robot::AutonomousPeriodic() {
 void Robot::TeleopInit() {
 }
 void Robot::TeleopPeriodic() {
+
+  conveyor(shooterMode);
   
-  //NEW Drive Control
-  drive(l_stick.GetY(), r_stick.GetX(), r_stick.GetRawButton(1), l_stick.GetRawButton(1), logicontroller.GetRawButton(2));
-  
-  //NEW Conveyor Control
   if(logicontroller.GetRawButton(A)){
     shooterMode = 1;
   } else if (logicontroller.GetRawButton(Y)){
     shooterMode = 2;
+  } else if (logicontroller.GetRawButton(X)){
+    shooterMode = 3;
   } else {
     shooterMode = 0;
   }
-  shooterSubsystem(shooterMode);
-  //TEMPORARY:
-  //  Elevator control
-  if(logicontroller.GetRawButton(back)){
-    elevator.Set(0.1);
-  } else if(logicontroller.GetRawButton(select)){
-    elevator.Set(-1);
+  //NEW Drive Control
+  //forward/backward input, turn input, reverse?, intake?
+  drive(l_stick.GetY(), r_stick.GetX(), r_stick.GetRawButton(1), l_stick.GetRawButton(1));
+  
+  //NEW Conveyor Control  
+  //mode, shooting?, aiming?, manual override?
+  teleop(shooterMode, logicontroller.GetRawButton(A), logicontroller.GetRawButton(B), logicontroller.GetRawButton(A));
+  //Color Wheel Extension and Retraction
+  if(r_stick.GetRawButton(2)){
+    colorSolUp.Set(true);
+    colorSolDown.Set(false);
   } else {
-    elevator.Set(logicontroller.GetRawAxis(3));
+    colorSolUp.Set(false);
+    colorSolDown.Set(true);
   }
-  //  Shoot
-  /*
-  //Aiming Button
-  frc::SmartDashboard::PutBoolean("aiming", aiming);
-  if(logicontroller.GetRawButton(B)){
-    aiming = 1;
-  }
-  else if (logicontroller.GetRawButton(X)){
-    aiming = 0;
-  }
-  */
-  //Shooting Button 
-  //if(logicontroller.GetRawButton(Y)){
-    //shoot(1);
-    //aiming = 1;
-    /*
-    if(0 < targetDistance && targetDistance < 100){
-      shooter((-shooterInput*(shooterAdjustment)));
-      frc::SmartDashboard::PutString("targeting", "active");
-      
-      belt.Set(conveyorSpeed);
-      lift1.Set(liftPower);
-      lift2.Set(-liftPower);
-    } else {
-      shooter(-3300);
-    }
-    feed = 1;
-  } else {
-    shooter(0);
-    frc::SmartDashboard::PutString("targeting", "inactive");
-      //belt.Set(0);
-      lift1.Set(0);
-      lift2.Set(0);
-      //aiming = 0;
-    frc::SmartDashboard::PutString("SHOOTER:", "ACTIVE");
-    feed = 0;
-    shoot(0);
-  } 
-*/
-
-  /*
-  //  Conveyor/lift
-  if(logicontroller.GetRawButton(7)){
-    belt.Set(conveyorSpeed);
-    lift1.Set(liftPower);
-    lift2.Set(-liftPower);   
-  }else if(logicontroller.GetRawButton(5)){
-    belt.Set(-conveyorSpeed);
-    lift1.Set(-liftPower);
-    lift2.Set(liftPower);
-  }else {
-    belt.Set(0);
-    lift1.Set(0);
-    lift2.Set(0);
-  }
-  */
-  //NON TEMPORARY:
-  //COLOR SENSOR
-
   //Color Sensor calculations
   frc::Color detectedColor = m_colorSensor.GetColor();
   string colorString;
@@ -553,53 +744,8 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutNumber("Red", detectedColor.red);
   frc::SmartDashboard::PutNumber("Confidence", confidence);
   frc::SmartDashboard::PutString("Detected Color", colorString);
-  
 
-
-  frc::SmartDashboard::PutBoolean("shooting", feed);
-
-  double targetArea = lltable->GetNumber("ta", 0);
-  targetDistance = ((18)*(pow(targetArea, -.509)));
-  horizontalOffset = lltable->GetNumber("tx", 0);
-
-  //  Getting RPM
-  hoodAngle = atan((2*(73/12))/targetDistance);
-
-  vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
-  shooterRPM = 2*(vFeetPerSecond*(60*12))/(4*M_PI);
-  //messed up
-  shooterInput = shooterRPM/(1.25);
-  frc::SmartDashboard::PutNumber("target area", targetArea);
-  frc::SmartDashboard::PutNumber("distance", targetDistance);
-  frc::SmartDashboard::PutNumber("angle", hoodAngle);
-  frc::SmartDashboard::PutNumber("angle degrees", ((hoodAngle*180/M_PI)));
-  frc::SmartDashboard::PutNumber("hood setpoint", hoodSetpoint);
-  frc::SmartDashboard::PutNumber("Speed(ft/s", vFeetPerSecond);
-  frc::SmartDashboard::PutNumber("shooter RPM", shooterRPM);
-  //  Convert Angle to Encoder Counts
-  //    38 Counts ~ 15 Degrees
-  hoodSetpoint = hoodAngle * hoodMax / angleRange;
-  //  Update Encoders
-  hoodPosition = hoodPoint.GetPosition() - hoodInit;
-  elevatorPosition = elevatorPoint.GetPosition() - elevatorInit;
-  turretPosition = turretPoint.GetPosition() - turretInit;
-  //Shooter Launch
-  frc::SmartDashboard::PutNumber("aiming", aiming);
-
-
-  //SOLENOIDS
-  //Intake Solenoid
-  if(logicontroller.GetRawButtonPressed(rb) && intakeSolUp == 0){
-    intakeSolUp = 1;
-    intakeSolOpen.Set(false);
-    intakeSolClose.Set(true);
-  }
-  else if(logicontroller.GetRawButtonPressed(rt) && intakeSolUp == 1){
-    intakeSolUp = 0;
-    intakeSolOpen.Set(true);
-    intakeSolClose.Set(false);
-  }
-
+  //Elevator Brake
   if(r_stick.GetRawButton(3)){
     brakeSolOff.Set(true);
     brakeSolOn.Set(false);
@@ -607,68 +753,19 @@ void Robot::TeleopPeriodic() {
     brakeSolOff.Set(false);
     brakeSolOn.Set(true);
   }
-  if(r_stick.GetRawButton(2)){
-    colorSolUp.Set(true);
-    colorSolDown.Set(false);
+
+  //TEMPORARY:
+  //  Elevator control
+  if(logicontroller.GetRawButton(back)){
+    elevator.Set(0.1);
+  } else if(logicontroller.GetRawButton(select)){
+    elevator.Set(-1);
   } else {
-    colorSolUp.Set(false);
-    colorSolDown.Set(true);
+    elevator.Set(logicontroller.GetRawAxis(3));
   }
 
   //Skywalker Control
   skywalker.Set(ControlMode::PercentOutput, logicontroller.GetRawAxis(2)); 
-  
-
-#ifdef autoBallPickup
-  //Auto Ball Pickup
-  ///UNTESTED
-  ///INCOMPLETE
-
-  //Declaring Variables to store Table Information
-  auto boxes = table->GetNumberArray("boxes", {});
-  auto object_classes = table->GetStringArray("object_classes", {});
-  
-  //Variable to store object center coordinate
-  vector< pair<double, double> > objectCoordinates = {};
-  //For each object, average the coordinates into a center coordinate. Push this to objectCoordinates.
-  for (auto i = 0; i < boxes.size(); i += 4) {
-    /* [top_left__x1, top_left_y1, bottom_right_x1, bottom_right_y1, top_left_x2, top_left_y2, … ] */
-    auto centerX = (boxes[i+0] + boxes[i+2]) / 2;
-    auto centerY = (boxes[i+1] + boxes[i+3]) / 2;
-    auto coordinate = make_pair(centerX, centerY);
-    objectCoordinates.push_back(coordinate);
-  }
-
-  //  Auto Ball Pickup
-  if(l_stick.GetRawButton(2) && pickupMode == 0){
-    pickupMode = 1;
-  }
-  else if(l_stick.GetRawButton(2) && pickupMode == 1){
-    pickupMode = 0;
-  }
-
-  /* don't work
-  for (auto i = 0; i < object_classes.size(); i++) {
-    if (object_classes[i] == "powercell" && pickupMode == 1) {
-      auto firstBallCoordinate = objectCoordinates[i];
-      auto firstBallX = firstBallCoordinate.first;
-      PID(firstBallX-640, );
-    }
-  }
-  */
-  //???
-  for (auto i = 0; i < object_classes.size(); i++) {
-    if (object_classes[i] == "powercell") {
-      auto firstBallCoordinate = objectCoordinates[i];
-      auto firstBallX = firstBallCoordinate.first;
-      auto firstBallY = firstBallCoordinate.second;
-      break;
-    }
-  }
-  #endif
-
-  
-  
 
   /*  THE CODE BELOW IS FOR FINDING SETPOINTS FOR PID
       COMMENT IT OUT UNLESS WE NEED TO REDO PID SETPOINTS */
