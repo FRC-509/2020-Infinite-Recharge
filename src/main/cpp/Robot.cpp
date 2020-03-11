@@ -118,6 +118,11 @@ int LEDPWM;
 
 bool shootCommand;
 bool manualToggle;
+//colors
+string blue = "Blue";
+string red = "Red";
+string yellow = "Yellow";
+string green = "green";
 //MOTORS
 
 //Falcon Motor Controller Declaration
@@ -237,23 +242,25 @@ void intake(double power, bool intakeSol){
   }
 }
 //  Combined Drive Function
-void drive(float left, float right, bool intaking, bool reverse){
+void drive(float left, float right, bool intaking, bool reverse, bool climb){
   //driving
-  if (!reverse){
-    leftDrive(driveCurve(left) - driveCurve(right));
-    rightDrive(driveCurve(left) + driveCurve(right));
-  } else {
-    leftDrive(-driveCurve(left) - driveCurve(right));
-    rightDrive(-driveCurve(left) + driveCurve(right));
-  }
+  if (!climb){
+    if (!reverse){
+      leftDrive(driveCurve(left) - driveCurve(right));
+      rightDrive(driveCurve(left) + driveCurve(right));
+    } else {
+      leftDrive(-driveCurve(left) - driveCurve(right));
+      rightDrive(-driveCurve(left) + driveCurve(right));
+    }
 
-  //intaking
-  if (intaking){
-    intakeSolUp = 1;
-    intake(intakePower, intakeSolUp);
-  } else {
-    intakeSolUp = 0;
-    intake(0, intakeSolUp);
+    //intaking
+    if (intaking){
+      intakeSolUp = 1;
+      intake(intakePower, intakeSolUp);
+    } else {
+      intakeSolUp = 0;
+      intake(0, intakeSolUp);
+    }
   }
   //Output Intake Position to SmartDashboard
   frc::SmartDashboard::PutBoolean("Intake Down?", intakeSolUp);
@@ -267,6 +274,16 @@ bool syncShooters(double input){
     return true;  
   } else {
     return false;
+  }
+}
+//changing the color wheel spinners position
+void PosChangeColorWheel(){
+  if(r_stick.GetRawButton(2)){
+    colorSolUp.Set(true);
+    colorSolDown.Set(false);
+} else {
+    colorSolUp.Set(false);
+    colorSolDown.Set(true);
   }
 }
 //Sync and reverse a kicker motor
@@ -294,6 +311,80 @@ bool softStop(float max, float min, double motorInput, double motorPosition){
     return false;
   }
 }
+
+/*char colorSensor(){
+
+  //Color Sensor calculations
+  frc::Color detectedColor = m_colorSensor.GetColor();
+  string colorString;
+     double confidence = 0.0;
+  frc::Color matchedColor = m_colorMatcher.MatchClosestColor(detectedColor, confidence);
+  //Set colorString to match detected color
+  if (matchedColor == kBlueTarget) {
+    colorString = "Blue";
+    char color = colorString[0];
+    return color; 
+  }
+  else if (matchedColor == kGreenTarget) {
+    colorString = "Green";
+    char color = colorString[0];
+    return color;
+  }
+  else if (matchedColor == kRedTarget) {
+    colorString = "Red";
+    char color = colorString[0];
+    return color;
+  }
+  else if (matchedColor == kYellowTarget) {
+    colorString = "Yellow";
+    char color = colorString[0];
+    return color;
+  }
+  else {
+    colorString = "Unknown";
+    char color = colorString[0];
+    return color;
+  }/*
+  //Display color data on SmartDashboard
+  frc::SmartDashboard::PutNumber("Blue", detectedColor.blue);
+  frc::SmartDashboard::PutNumber("Green", detectedColor.green);
+  frc::SmartDashboard::PutNumber("Red", detectedColor.red);
+  frc::SmartDashboard::PutNumber("Confidence", confidence);
+  frc::SmartDashboard::PutString("Detected Color", colorString);
+
+
+}
+/*void ColorWheel(char actualColor){
+  char actualBlue = blue[0];
+  char actualRed = red[0];
+  char actualGreen = green[0];
+  char actualYellow = yellow[0];
+  if (actualColor == actualBlue){
+      colorWheelMotor.Set(1);
+  }
+  else{
+    colorWheelMotor.Set(0);
+  }
+  if (actualColor == actualGreen){
+      colorWheelMotor.Set(1);
+  }
+  else{
+    colorWheelMotor.Set(0);
+  }
+  if (actualColor == actualYellow){
+      colorWheelMotor.Set(1);
+  }
+  else{
+    colorWheelMotor.Set(0);
+  }
+  if (actualColor == actualRed){
+      colorWheelMotor.Set(1);
+  }
+  else{
+    colorWheelMotor.Set(0);
+  }
+}
+*/
 //Turret Movement
 bool turretSet(double input){
   
@@ -324,8 +415,10 @@ bool hoodSet(double input){
     hood.Set(PID(hoodSetpoint-hoodPosition, hoodKp, hoodKi));
     atSoftStop = 0;
     return atSoftStop;
-  }
-  */
+  }*/
+
+  hood.Set(input);
+  
   //frc::SmartDashboard::PutBoolean("Hood at soft stop?", atSoftStop);
 }
 
@@ -481,7 +574,7 @@ bool hoodTracking(){
   hoodTargetDegrees = ((hoodTarget/M_PI)*180);
   hoodTargetEncoder = ((-2 * hoodTargetDegrees) + 100);
   //50deg to 70deg(hood) 
-  hood.Set(PID((hoodTargetEncoder - hoodEncoder.GetPosition()), hoodKp, hoodKi));
+  //hood.Set(PID((hoodTargetEncoder - hoodEncoder.GetPosition()), hoodKp, hoodKi));
   if (-0.1 <= error && error <= 0.1){
     return true;  
   } else {
@@ -509,10 +602,12 @@ bool aiming(bool manual){
 }
 double shooterSpeed(){
   double hoodAngle;
-  hoodAngle = atan((2*(73/12))/distanceCalculator());
+//  hoodAngle = atan((2*(73/12))/distanceCalculator());
+  hoodAngle = (50*M_PI)/180;
   //hoodAngle in radians
   vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
   shooterInput = shooterRPM/(1.25);
+  return shooterInput;
   frc::SmartDashboard::PutNumber("feet per second", vFeetPerSecond);
 }
 //shooter functionality
@@ -575,7 +670,7 @@ void shooterSubsystem(int mode, bool shootCommand){
     //"Manual Control"
     case 3:
       turret.Set(logicontroller.GetRawAxis(0));
-      hood.Set(logicontroller.GetRawAxis(1));
+      hoodSet(logicontroller.GetRawAxis(1));
       conveyor(3, shootCommand);
       //shooterOn = syncShooters(3250);
       manualControl = 1;
@@ -613,9 +708,13 @@ void climber(double elevatorPosition, bool manual){
   //Manual Elevator control
   if(manual){
     if(l_stick.GetRawButton(3)){
+      brakeSolOff.Set(true);
+      brakeSolOn.Set(false);
       elevator.Set(l_stick.GetRawAxis(1));
     } else {
       elevator.Set(0);
+      brakeSolOff.Set(false);
+      brakeSolOn.Set(true);
     }
   } else {
     //experimental PID
@@ -646,7 +745,7 @@ void climber(double elevatorPosition, bool manual){
     }
   }
   //Skywalker Control
-  skywalker.Set(ControlMode::PercentOutput, l_stick.GetRawAxis(1)); 
+  skywalker.Set(ControlMode::PercentOutput, logicontroller.GetRawAxis(2)); 
   
 }
 //all teleop controls(in development)
@@ -671,7 +770,7 @@ void Robot::RobotInit() {
   belt.SetSmartCurrentLimit(10);
   turret.SetSmartCurrentLimit(10);
   hood.SetSmartCurrentLimit(10);
-  elevator.SetSmartCurrentLimit(40);
+  elevator.SetSmartCurrentLimit(60);
   colorWheelMotor.SetSmartCurrentLimit(10);
   
   //Current Limiting Falcons + Intake (WIP)
@@ -793,7 +892,7 @@ void Robot::AutonomousPeriodic() {
 void Robot::TeleopInit() {
 }
 void Robot::TeleopPeriodic() {
-
+  climber(elevatorPosition, true);
   //shoot command
   shootCommand = logicontroller.GetRawButton(8);
   //manual toggle
@@ -823,46 +922,12 @@ void Robot::TeleopPeriodic() {
 
   //NEW Drive Control
   //forward/backward input, turn input, reverse?, intake?
-  drive(l_stick.GetY(), r_stick.GetX(), r_stick.GetRawButton(1), l_stick.GetRawButton(1));
+  drive(l_stick.GetY(), r_stick.GetX(), r_stick.GetRawButton(1), l_stick.GetRawButton(1), l_stick.GetRawButton(3));
   shooterSubsystem(shooterMode, shootCommand);
   //NEW Conveyor Control  
   //mode, shooting?, aiming?, manual override?
   //teleop(shooterMode, logicontroller.GetRawButton(2), logicontroller.GetRawButton(3), logicontroller.GetRawButton(2));
   //Color Wheel Extension and Retraction
-  if(r_stick.GetRawButton(2)){
-    colorSolUp.Set(true);
-    colorSolDown.Set(false);
-  } else {
-    colorSolUp.Set(false);
-    colorSolDown.Set(true);
-  }
-  //Color Sensor calculations
-  frc::Color detectedColor = m_colorSensor.GetColor();
-  string colorString;
-  double confidence = 0.0;
-  frc::Color matchedColor = m_colorMatcher.MatchClosestColor(detectedColor, confidence);
-  //Set colorString to match detected color
-  if (matchedColor == kBlueTarget) {
-    colorString = "Blue";
-  }
-  else if (matchedColor == kGreenTarget) {
-    colorString = "Green";
-  }
-  else if (matchedColor == kRedTarget) {
-    colorString = "Red";
-  }
-  else if (matchedColor == kYellowTarget) {
-    colorString = "Yellow";
-  }
-  else {
-    colorString = "Unknown";
-  }
-  //Display color data on SmartDashboard
-  frc::SmartDashboard::PutNumber("Blue", detectedColor.blue);
-  frc::SmartDashboard::PutNumber("Green", detectedColor.green);
-  frc::SmartDashboard::PutNumber("Red", detectedColor.red);
-  frc::SmartDashboard::PutNumber("Confidence", confidence);
-  frc::SmartDashboard::PutString("Detected Color", colorString);
 
   /*  THE CODE BELOW IS FOR FINDING SETPOINTS FOR PID
       COMMENT IT OUT UNLESS WE NEED TO REDO PID SETPOINTS */
