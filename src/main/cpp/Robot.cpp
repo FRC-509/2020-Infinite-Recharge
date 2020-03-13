@@ -931,7 +931,7 @@ void Robot::TeleopPeriodic() {
   frc::SmartDashboard::PutBoolean("actuallyshoot buuton", butReallyShootCommand);
   frc::SmartDashboard::PutNumber("shooter modse", shooterMode);
   //shooterMode = 3;
-  
+
   /*
   if(logicontroller.GetRawButton(2)){
     shooterMode = 1;
