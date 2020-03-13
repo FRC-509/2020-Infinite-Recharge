@@ -63,7 +63,7 @@ using namespace std;
 //Hood Properties
 #define angleRange M_PI/12
 //Rpm of Shooter
-double shooterRPM = std::clamp(0, 0, 8000);
+double shooterRPM = std::clamp(0, 0, 80000);
 double targetDistance;
 double vFeetPerSecond;
 #define shooterAdjustment 1.05
@@ -279,11 +279,11 @@ bool syncShooters(double input){
 //changing the color wheel spinners position
 void PosChangeColorWheel(){
   if(r_stick.GetRawButton(2)){
-    colorSolUp.Set(true);
-    colorSolDown.Set(false);
-} else {
     colorSolUp.Set(false);
     colorSolDown.Set(true);
+  } else {
+    colorSolUp.Set(true);
+    colorSolDown.Set(false);
   }
 }
 //Sync and reverse a kicker motor
@@ -417,7 +417,7 @@ bool hoodSet(double input){
     return atSoftStop;
   }*/
 
-  hood.Set(input);
+  //hood.Set(input);
   
   //frc::SmartDashboard::PutBoolean("Hood at soft stop?", atSoftStop);
 }
@@ -574,6 +574,8 @@ bool hoodTracking(){
   hoodTargetDegrees = ((hoodTarget/M_PI)*180);
   hoodTargetEncoder = ((-2 * hoodTargetDegrees) + 100);
   //50deg to 70deg(hood) 
+  //hood.Set(logicontroller.GetRawAxis(1));
+  
   //hood.Set(PID((hoodTargetEncoder - hoodEncoder.GetPosition()), hoodKp, hoodKi));
   if (-0.1 <= error && error <= 0.1){
     return true;  
@@ -602,8 +604,8 @@ bool aiming(bool manual){
 }
 double shooterSpeed(){
   double hoodAngle;
-//  hoodAngle = atan((2*(73/12))/distanceCalculator());
-  hoodAngle = (50*M_PI)/180;
+  hoodAngle = atan((2*(73/12))/distanceCalculator());
+  //hoodAngle = (50*M_PI)/180;
   //hoodAngle in radians
   vFeetPerSecond = (2*(sqrt(((73/12)*cotan(hoodAngle)*32.185)/sin(2*hoodAngle))));
   shooterInput = shooterRPM/(1.25);
@@ -611,15 +613,22 @@ double shooterSpeed(){
   frc::SmartDashboard::PutNumber("feet per second", vFeetPerSecond);
 }
 //shooter functionality
-void shooterSubsystem(int mode, bool shootCommand){
+double shooterSubsystem(int mode, bool shootCommand){
   if(mode == 3){
+    if (shootCommand){
+      limelightOn(1);
+      mode = 1;
     } else {
-      if (shootCommand){
-        limelightOn(1);
-        mode = 1;
+      limelightOn(0);
+      mode = 0;
+    }
+  } else {
+    if (shootCommand){
+      limelightOn(1);
+      mode = 1;
     } else {
-        limelightOn(0);
-        mode = 0;
+      limelightOn(0);
+      mode = 0;
     }
   }
   
@@ -698,6 +707,7 @@ void shooterSubsystem(int mode, bool shootCommand){
   frc::SmartDashboard::PutBoolean("Manual Control?", manualControl);
   frc::SmartDashboard::PutBoolean("CONVEYOR BELT:", conveyorOn);
   frc::SmartDashboard::PutNumber("shooter mode for real", mode);
+  return shooterInput;
 }
 void climber(double elevatorPosition, bool manual){
   
@@ -743,6 +753,7 @@ void climber(double elevatorPosition, bool manual){
       brakeSolOff.Set(false);
       brakeSolOn.Set(true);
     }
+
   }
   //Skywalker Control
   skywalker.Set(ControlMode::PercentOutput, logicontroller.GetRawAxis(2)); 
@@ -774,7 +785,14 @@ void Robot::RobotInit() {
   colorWheelMotor.SetSmartCurrentLimit(10);
   
   //Current Limiting Falcons + Intake (WIP)
-    
+  cs::UsbCamera usbcamera = frc::CameraServer::GetInstance()->StartAutomaticCapture();
+  cs::UsbCamera usbcamera2 = frc::CameraServer::GetInstance()->StartAutomaticCapture();
+  //Adding Camera Feeds
+  usbcamera.SetResolution(1,1);
+  usbcamera.SetFPS(15);
+  usbcamera2.SetResolution(1,1);
+  usbcamera2.SetFPS(15);
+  
     
   m_chooser.SetDefaultOption(kAutoNameDefault, kAutoNameDefault);
   m_chooser.AddOption(kAutoNameCustom, kAutoNameCustom);
@@ -823,15 +841,7 @@ void Robot::RobotInit() {
   m_colorMatcher.AddColorMatch(kRedTarget);
   m_colorMatcher.AddColorMatch(kYellowTarget);
  
- //Adding Camera Feeds
- cs::UsbCamera usbcamera = frc::CameraServer::GetInstance()->StartAutomaticCapture();
- //cs::UsbCamera usbcamera2 = frc::CameraServer::GetInstance()->StartAutomaticCapture();
- 
- //usbcamera.SetResolution(720, 480);
- //usbcamera.SetResolution(500, 480);
- //usbcamera.SetResolution(480,320);
- usbcamera.SetResolution(1,1);
- usbcamera.SetFPS(25);
+
  // frc::SmartDashboard::PutNumber("Resolution: ", usbcamera.getResolution());
 
  //usbcamera2.SetResolution(1,1);
@@ -892,20 +902,34 @@ void Robot::AutonomousPeriodic() {
 void Robot::TeleopInit() {
 }
 void Robot::TeleopPeriodic() {
+  double shooterInput;
+  shooterInput = shooterSubsystem(shooterMode, shootCommand);
+  frc::SmartDashboard::PutNumber("shoot inpoot", shooterInput);
+  hood.Set(logicontroller.GetRawAxis(1));
+  PosChangeColorWheel();
+  bool butReallyShootCommand;
+  frc::SmartDashboard::PutNumber("target distance calculated:", distanceCalculator());
+  frc::SmartDashboard::PutNumber("poot spood", shooterSpeed());
   climber(elevatorPosition, true);
   //shoot command
   shootCommand = logicontroller.GetRawButton(8);
+  butReallyShootCommand = logicontroller.GetRawButton(4);
   //manual toggle
   if(logicontroller.GetRawButton(9) && manualToggle == 0){
     shooterMode = 3;
     manualToggle = 1;
   } else if (logicontroller.GetRawButton(10) && manualToggle == 1){
-    shooterMode = 0;
+    if(butReallyShootCommand){
+      shooterMode = 1;
+    } else {
+      shooterMode = 0;
+    }
     manualToggle = 0;
   }
   frc::SmartDashboard::PutBoolean("manual?", manualToggle);
   //shooterMode = 3;
-  frc::SmartDashboard::PutNumber("shooter mode", shooterMode);
+  frc::SmartDashboard::PutBoolean("actuallyshoot buuton", butReallyShootCommand);
+  frc::SmartDashboard::PutNumber("shooter modse", shooterMode);
   //shooterMode = 3;
   
   /*
